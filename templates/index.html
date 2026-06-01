@@ -10,6 +10,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans','Segoe UI',sans-serif;background:#0F172A;color:#E2E8F0;min-height:100vh}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#1E293B}::-webkit-scrollbar-thumb{background:#334155;border-radius:3px}
+@media print{#hdr,#status-bar{display:none!important}#main{padding:0}body{background:#fff;color:#000}.card{border:1px solid #ccc;background:#fff}.badge{border:1px solid #ccc}#view-dashboard,#view-maquinas,#view-ordenes,#view-nueva,#view-detalle{display:none!important}#view-reporte{display:block!important}}
 .card{background:#1E293B;border:1px solid #334155;border-radius:12px}
 .btn{cursor:pointer;border:none;border-radius:8px;font-family:inherit;font-weight:600;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
 .btn:hover{filter:brightness(1.15);transform:translateY(-1px)}
@@ -118,17 +119,23 @@ input.inp:focus,select.inp:focus{border-color:#3B82F6}
 <!-- MODAL (ajuste) -->
 <div id="modal">
   <div id="modal-box">
-    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;color:#F1F5F9">🔧 Registrar Ajuste</h3>
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;color:#F1F5F9">📋 Registrar Novedad</h3>
     <div style="margin-bottom:12px">
-      <label class="lbl">Descripción del ajuste *</label>
-      <input id="aj-desc" class="inp" placeholder="Describe el ajuste realizado"/>
+      <label class="lbl">Descripción de Novedad *</label>
+      <textarea id="aj-desc" class="inp" rows="3" placeholder="Describe la novedad presentada…"></textarea>
+    </div>
+    <div style="margin-bottom:12px">
+      <label class="lbl">Persona que Reporta</label>
+      <select id="aj-reporta" class="inp">
+        <option value="">— Seleccionar —</option>
+      </select>
     </div>
     <div style="margin-bottom:20px">
       <label class="lbl">Duración (minutos)</label>
       <input id="aj-dur" class="inp" type="number" placeholder="0"/>
     </div>
     <div style="display:flex;gap:10px">
-      <button class="btn" onclick="submitAjuste()" style="flex:1;padding:11px;background:#4C1D95;color:#fff;font-size:14px">Guardar Ajuste</button>
+      <button class="btn" onclick="submitAjuste()" style="flex:1;padding:11px;background:#4C1D95;color:#fff;font-size:14px">💾 Guardar Novedad</button>
       <button class="btn" onclick="closeModal()" style="padding:11px 18px;background:#0F172A;color:#94A3B8;border:1px solid #334155;font-size:13px">Cancelar</button>
     </div>
   </div>
@@ -277,7 +284,12 @@ function renderCurrent() {
   else if(curView==="maquinas")  renderMaquinas();
   else if(curView==="ordenes")   renderOrdenes();
   else if(curView==="nueva")     { /* no re-render on tick */ }
-  else if(curView==="detalle")   renderDetalle();
+  else if(curView==="detalle") {
+    // Don't wipe vel-inp if user is actively editing it
+    const velEl=document.getElementById("vel-inp");
+    if(velEl && document.activeElement===velEl) return;
+    renderDetalle();
+  }
   else if(curView==="reporte")   renderReporte();
 }
 
@@ -318,14 +330,15 @@ function renderDashboard() {
   });
   html+=`</div>`;
 
-  if(orders.length===0){
+  const activeOrds=orders.filter(o=>o.status!=="finalizada");
+  if(activeOrds.length===0){
     html+=`<div class="card empty-state"><div style="font-size:48px;margin-bottom:16px">🏭</div>
       <div style="font-size:18px;font-weight:600;color:#94A3B8;margin-bottom:8px">Sin órdenes de producción</div>
       <div style="color:#475569;margin-bottom:24px">Crea la primera orden o sube el catálogo Excel</div>
       <button class="btn" onclick="setView('nueva')" style="padding:10px 24px;background:#3B82F6;color:#fff;font-size:14px">＋ Nueva Orden</button></div>`;
   } else {
     html+=`<div class="orders-grid">`;
-    orders.forEach(order=>{
+    orders.filter(o=>o.status!=="finalizada").forEach(order=>{
       const t=computeTimes(order);
       const vp=Number(order.velocidadObjetivo)>0?Math.min((Number(order.velocidadActual)/Number(order.velocidadObjetivo))*100,100):0;
       const vc=velColor(vp);
@@ -462,7 +475,8 @@ function renderOrdenes() {
     <button class="btn" onclick="setView('nueva')" style="padding:8px 20px;background:#3B82F6;color:#fff;font-size:13px">＋ Nueva</button>
   </div>`;
 
-  if(orders.length===0){
+  const activeOrds=orders.filter(o=>o.status!=="finalizada");
+  if(activeOrds.length===0){
     html+=`<div class="card" style="padding:40px;text-align:center;color:#475569">Sin órdenes registradas</div>`;
   } else {
     html+=`<div class="card" style="overflow:auto"><table class="tbl">
@@ -636,11 +650,14 @@ function renderDetalle() {
   const ajList=(order.ajustes||[]).length>0
     ? (order.ajustes||[]).map(a=>`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#0F172A;border-radius:8px;margin-bottom:6px">
-          <div><span style="font-size:13px;color:#E2E8F0">${a.descripcion}</span>
-            ${a.duracion?`<span style="font-size:11px;color:#64748B;margin-left:8px">(${a.duracion} min)</span>`:""}</div>
+          <div>
+            <span style="font-size:13px;color:#E2E8F0">${a.descripcion}</span>
+            ${a.duracion?`<span style="font-size:11px;color:#64748B;margin-left:8px">(${a.duracion} min)</span>`:""}
+            ${a.reporta?`<span style="font-size:11px;color:#10B981;margin-left:8px">👤 ${a.reporta}</span>`:""}
+          </div>
           <span style="font-size:11px;color:#475569;font-family:'JetBrains Mono',monospace">${fmtDT(a.at)}</span>
         </div>`).join("")
-    : `<div style="color:#475569;font-size:13px;text-align:center;padding:16px">Sin ajustes registrados</div>`;
+    : `<div style="color:#475569;font-size:13px;text-align:center;padding:16px">Sin novedades registradas</div>`;
 
   document.getElementById("view-detalle").innerHTML=`
     <div>
@@ -688,8 +705,8 @@ function renderDetalle() {
           </div>
           <!-- Ajustes -->
           <div class="card" style="padding:20px">
-            <h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">🔧 Ajustes</h3>
-            <button class="btn" onclick="openModal('${order.id}')" style="padding:8px 16px;background:#4C1D95;color:#fff;font-size:13px;margin-bottom:14px">＋ Registrar Ajuste</button>
+            <h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">📋 Novedades</h3>
+            <button class="btn" onclick="openModal('${order.id}')" style="padding:8px 16px;background:#4C1D95;color:#fff;font-size:13px;margin-bottom:14px">＋ Registrar Novedad</button>
             ${ajList}
           </div>
         </div>
@@ -715,7 +732,11 @@ async function patchStatus(id, status) {
   await fetch(`/api/orders/${id}/status`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});
 }
 async function patchVel(id) {
-  const vel=Number(document.getElementById("vel-inp").value)||0;
+  const el=document.getElementById("vel-inp");
+  if(!el){console.error("vel-inp not found");return;}
+  const vel=Number(el.value)||0;
+  el.style.borderColor="#10B981";
+  setTimeout(()=>{if(el)el.style.borderColor="";},1500);
   await fetch(`/api/orders/${id}/velocidad`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({velocidadActual:vel})});
 }
 
@@ -724,14 +745,19 @@ function openModal(oid) {
   ajusteOid=oid;
   document.getElementById("aj-desc").value="";
   document.getElementById("aj-dur").value="";
+  // Populate operarios in reporta select
+  const sel=document.getElementById("aj-reporta");
+  sel.innerHTML='<option value="">— Seleccionar —</option>'+OPERARIOS.map(op=>`<option value="${op}">${op}</option>`).join("");
   document.getElementById("modal").classList.add("open");
+  setTimeout(()=>document.getElementById("aj-desc").focus(),100);
 }
 function closeModal() { document.getElementById("modal").classList.remove("open"); ajusteOid=null; }
 async function submitAjuste() {
   const desc=document.getElementById("aj-desc").value.trim();
   if(!desc||!ajusteOid) return;
   const dur=document.getElementById("aj-dur").value;
-  await fetch(`/api/orders/${ajusteOid}/ajuste`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({descripcion:desc,duracion:dur})});
+  const reporta=document.getElementById("aj-reporta").value;
+  await fetch(`/api/orders/${ajusteOid}/ajuste`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({descripcion:desc,duracion:dur,reporta})});
   closeModal();
 }
 document.getElementById("modal").addEventListener("click",e=>{ if(e.target===document.getElementById("modal")) closeModal(); });
@@ -796,16 +822,29 @@ async function loadCatalog() {
 // ═══════════════════════════════════════════════
 function renderReporte() {
   const finalizadas = orders.filter(o=>o.status==="finalizada");
-  const todas = orders; // todas incluyendo activas
+  const todas = [...orders]; // todas incluyendo activas
 
   // Summary cards
   const totalOrds = todas.length;
   const totalFin  = finalizadas.length;
   const totalActivas = todas.filter(o=>o.status!=="finalizada").length;
+  
+  if(totalOrds===0){
+    document.getElementById("view-reporte").innerHTML=`<div class="card" style="padding:60px;text-align:center">
+      <div style="font-size:48px;margin-bottom:16px">📈</div>
+      <div style="font-size:18px;font-weight:600;color:#94A3B8;margin-bottom:8px">Sin órdenes registradas</div>
+      <div style="color:#475569">Crea órdenes de producción para ver el reporte</div>
+    </div>`;
+    return;
+  }
 
   let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
     <h2 style="font-size:20px;font-weight:700">📈 Reporte de Órdenes</h2>
-    <button class="btn" onclick="exportReporte()" style="padding:8px 18px;background:#10B981;color:#fff;font-size:13px">⬇️ Exportar CSV</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" onclick="exportReporte('csv')" style="padding:8px 16px;background:#10B981;color:#fff;font-size:13px">⬇️ CSV</button>
+      <button class="btn" onclick="exportReporte('excel')" style="padding:8px 16px;background:#1D4ED8;color:#fff;font-size:13px">⬇️ Excel</button>
+      <button class="btn" onclick="window.print()" style="padding:8px 16px;background:#4C1D95;color:#fff;font-size:13px">🖨️ Imprimir/PDF</button>
+    </div>
   </div>`;
 
   // KPI row
@@ -830,7 +869,7 @@ function renderReporte() {
         <th>Turno</th><th>Fecha</th><th>Estado</th>
         <th>T.Montaje</th><th>T.Ajuste</th><th>T.Producción</th><th>T.Total</th>
         <th>Vel.Obj</th><th>Vel.Real</th><th>Efic.</th>
-        <th>Ajustes</th>
+        <th>Novedades</th>
       </tr></thead><tbody>`;
 
     todas.forEach((o,i)=>{
@@ -859,7 +898,7 @@ function renderReporte() {
         <td style="font-family:'JetBrains Mono',monospace;color:#64748B;font-size:11px">${o.velocidadObjetivo||0}</td>
         <td style="font-family:'JetBrains Mono',monospace;color:#64748B;font-size:11px">${o.velocidadActual||0}</td>
         <td style="font-weight:700;font-size:12px;white-space:nowrap;color:${vp!=="—"?velColor(Number(vp)):"#475569"}">${vp!=="—"?vp+"%":"—"}</td>
-        <td style="font-size:11px;color:#64748B;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ajustesLista}">${(o.ajustes||[]).length} (${ajustesLista.substring(0,40)}${ajustesLista.length>40?"…":""})</td>
+        <td style="font-size:11px;color:#64748B;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(o.ajustes||[]).map(a=>a.descripcion+(a.reporta?' ['+a.reporta+']':'')).join(' | ')}">${(o.ajustes||[]).length} nov.</td>
       </tr>`;
     });
     html+=`</tbody></table></div>`;
@@ -867,32 +906,61 @@ function renderReporte() {
   document.getElementById("view-reporte").innerHTML=html;
 }
 
-function exportReporte() {
+function buildReporteRows(){
   const rows=[["Orden","Producto","Cliente","Máquina","Operario","Turno","Fecha","Estado",
-               "T.Montaje(seg)","T.Ajuste(seg)","T.Producción(seg)","T.Total(seg)",
-               "Vel.Objetivo","Vel.Real","Eficiencia%","Cant.Ajustes","Detalle Ajustes",
-               "Historial Estados"]];
+    "T.Montaje","T.Ajuste","T.Producción","T.Total",
+    "Vel.Objetivo","Vel.Real","Eficiencia%",
+    "Cant.Novedades","Detalle Novedades","Historial Estados"]];
   orders.forEach(o=>{
     const t=computeTimes(o);
     const tTotal=(t.tSetup||0)+(t.tAjuste||0)+(t.tProduccion||0)+(t.tFinalizada||0);
     const vp=Number(o.velocidadObjetivo)>0?((Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100).toFixed(1):"";
     const firstAt=o.history&&o.history.length>0?o.history[0].at:o.createdAt;
-    const histStr=(o.history||[]).map(h=>`${STATUS_CONFIG[h.status]?.label||h.status}@${fmtDT(h.at)}`).join(" → ");
-    const ajustesStr=(o.ajustes||[]).map(a=>`${a.descripcion}(${a.duracion||0}min)`).join(" | ");
+    const histStr=(o.history||[]).map(h=>`${STATUS_CONFIG[h.status]?.label||h.status} @ ${fmtDT(h.at)}`).join(" → ");
+    const novStr=(o.ajustes||[]).map(a=>`${a.descripcion}${a.reporta?" ["+a.reporta+"]":""}${a.duracion?" ("+a.duracion+"min)":""}`).join(" | ");
     rows.push([
       o.ordenId, o.producto, o.cliente||"", o.maquina||"", o.operario||"",
-      getTurno(firstAt), getFecha(firstAt), STATUS_CONFIG[o.status]?.label||o.status,
-      t.tSetup||0, t.tAjuste||0, t.tProduccion||0, tTotal,
-      o.velocidadObjetivo||0, o.velocidadActual||0, vp,
-      (o.ajustes||[]).length, ajustesStr, histStr,
+      o.turno||getTurno(firstAt), getFecha(firstAt), STATUS_CONFIG[o.status]?.label||o.status,
+      fmtTime(t.tSetup), fmtTime(t.tAjuste), fmtTime(t.tProduccion), fmtTime(tTotal),
+      o.velocidadObjetivo||0, o.velocidadActual||0, vp?vp+"%":"—",
+      (o.ajustes||[]).length, novStr||"—", histStr,
     ]);
   });
-  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
-  const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download=`reporte-produccion-${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
+  return rows;
+}
+
+function exportReporte(fmt) {
+  const rows=buildReporteRows();
+  const fecha=new Date().toISOString().slice(0,10);
+
+  if(fmt==="excel") {
+    // Build HTML table that Excel can open
+    let html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">';
+    html+='<head><meta charset="UTF-8"><style>th{background:#1e3a5f;color:#fff;padding:6px}td{padding:5px;border:1px solid #ccc}</style></head><body>';
+    html+='<table border="1">';
+    rows.forEach((row,i)=>{
+      html+='<tr>';
+      row.forEach(cell=>{
+        const tag=i===0?'th':'td';
+        html+=`<${tag}>${String(cell).replace(/&/g,'&amp;').replace(/</g,'&lt;')}</${tag}>`;
+      });
+      html+='</tr>';
+    });
+    html+='</table></body></html>';
+    const blob=new Blob([html],{type:"application/vnd.ms-excel;charset=utf-8"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=`reporte-produccion-${fecha}.xls`;
+    a.click();
+  } else {
+    // CSV with BOM for Excel spanish locale
+    const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";")).join("\n");
+    const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=`reporte-produccion-${fecha}.csv`;
+    a.click();
+  }
 }
 
 // ═══════════════════════════════════════════════
