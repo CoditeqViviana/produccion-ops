@@ -703,16 +703,23 @@ document.getElementById("excel-input").addEventListener("change",async function(
       const ws=wb.Sheets[wb.SheetNames[0]];
       const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
       const normalize=s=>String(s).toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g,"");
+      const MAQUINAS_CAT=["Nilpeter 1","Nilpeter 2","Kromia"];
       const mapped=rows.map(row=>{
         const norm={}; Object.entries(row).forEach(([k,v])=>{norm[normalize(k)]=v;});
-        return {
-          ordenId:          norm["orden"]||norm["#orden"]||norm["id"]||norm["norden"]||norm["numeroorden"]||"",
-          producto:         norm["producto"]||norm["descripcion"]||norm["articulo"]||"",
-          cliente:          norm["cliente"]||norm["customer"]||"",
-          cantidad:         Number(norm["cantidad"]||norm["qty"]||norm["piezas"]||0),
-          velocidadObjetivo:Number(norm["velocidad"]||norm["velocidadobjetivo"]||norm["velobj"]||0),
-          maquina:          norm["maquina"]||norm["machine"]||norm["equipo"]||"",
-        };
+        // # Orden — columna especifica del Excel de planta
+        const ordenId=String(norm["ordendeproduccionordendeproducciónnumber"]||norm["ordendeproduccionordendeproductionnumber"]||norm["orden"]||norm["norden"]||norm["id"]||"").trim();
+        // Producto = Referencia
+        const producto=String(norm["produccionreferencia"]||norm["referencia"]||norm["producto"]||norm["descripcion"]||"").trim();
+        // Cliente = Organizacion
+        const cliente=String(norm["produccionorganizacion"]||norm["organizacion"]||norm["cliente"]||"").trim();
+        // Cantidad = Total Etiquetas
+        const cantidad=Number(norm["ordendeproducciontotaletiquetas"]||norm["totaletiquetas"]||norm["cantidad"]||0);
+        // Metros lineales
+        const metros=Number(norm["ordendeproducciontotalmtslineales"]||norm["totalmtslineales"]||norm["metros"]||0);
+        // Maquina = Centro de Proceso (primera si hay varias)
+        const rawMaq=String(norm["ordendeproduccioncentrodeproceso"]||norm["centrodeproceso"]||norm["maquina"]||"").split(",")[0].trim();
+        const maquina=MAQUINAS_CAT.find(m=>normalize(rawMaq).includes(normalize(m)))||rawMaq||"";
+        return { ordenId, producto, cliente, cantidad, metros, velocidadObjetivo:0, maquina };
       }).filter(r=>r.ordenId!=="");
       await fetch("/api/catalog",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({rows:mapped})});
       catalog=mapped;
