@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{%- raw -%}<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
@@ -10,7 +10,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans','Segoe UI',sans-serif;background:#0F172A;color:#E2E8F0;min-height:100vh}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#1E293B}::-webkit-scrollbar-thumb{background:#334155;border-radius:3px}
-@media print{#hdr,#status-bar{display:none!important}#main{padding:0}body{background:#fff;color:#000}.card{border:1px solid #ccc;background:#fff}.badge{border:1px solid #ccc}#view-dashboard,#view-maquinas,#view-ordenes,#view-nueva,#view-detalle{display:none!important}#view-reporte{display:block!important}}
+@media print{body{background:#fff;color:#000}#hdr{display:none!important}#status-bar{display:none!important}#main{padding:0}.card{border:1px solid #ccc;background:#fff}.badge{border:1px solid #ccc}#view-dashboard{display:none!important}#view-maquinas{display:none!important}#view-ordenes{display:none!important}#view-nueva{display:none!important}#view-detalle{display:none!important}#view-reporte{display:block!important}}
 .card{background:#1E293B;border:1px solid #334155;border-radius:12px}
 .btn{cursor:pointer;border:none;border-radius:8px;font-family:inherit;font-weight:600;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
 .btn:hover{filter:brightness(1.15);transform:translateY(-1px)}
@@ -972,3 +972,4 @@ startTick();
 </script>
 </body>
 </html>
+{%- endraw -%}
