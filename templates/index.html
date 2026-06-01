@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ProducciónOps — Tablero en Vivo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans','Segoe UI',sans-serif;background:#0F172A;color:#E2E8F0;min-height:100vh}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#1E293B}::-webkit-scrollbar-thumb{background:#334155;border-radius:3px}
+.card{background:#1E293B;border:1px solid #334155;border-radius:12px}
+.btn{cursor:pointer;border:none;border-radius:8px;font-family:inherit;font-weight:600;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.pulse{animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.fade-in{animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+/* header */
+#hdr{background:#0F172A;border-bottom:1px solid #1E293B;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:100}
+#hdr-left{display:flex;align-items:center;gap:12px}
+#logo{width:32px;height:32px;background:linear-gradient(135deg,#3B82F6,#8B5CF6);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+#live-dot{width:8px;height:8px;background:#10B981;border-radius:50%;margin-left:4px}
+#nav{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.nav-btn{padding:6px 16px;font-size:13px;border:1px solid #334155;background:#1E293B;color:#94A3B8;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600;transition:all .15s}
+.nav-btn.active,.nav-btn:hover{background:#3B82F6;color:#fff;border-color:#3B82F6}
+/* status bar */
+#status-bar{padding:6px 24px;font-size:12px;display:flex;justify-content:space-between;align-items:center;display:none}
+/* main */
+#main{padding:24px;max-width:1500px;margin:0 auto}
+/* kpis */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.kpi{padding:20px}
+.kpi-label{font-size:12px;color:#64748B;margin-bottom:6px;font-weight:500}
+.kpi-val{font-size:32px;font-weight:700;font-family:'JetBrains Mono',monospace;line-height:1}
+.kpi-sub{font-size:11px;color:#475569;margin-top:6px}
+.kpi-icon{font-size:28px}
+/* order cards */
+.orders-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(390px,1fr));gap:16px}
+.order-card{padding:20px;transition:border-color .3s}
+.order-card.alert{border-color:#EF444440!important}
+/* table */
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{padding:10px 14px;text-align:left;color:#64748B;font-weight:600;white-space:nowrap;border-bottom:1px solid #334155}
+.tbl td{padding:10px 14px;border-bottom:1px solid #1E293B}
+.tbl tr:nth-child(even) td{background:#0F172A10}
+/* machine view */
+.maq-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:20px}
+/* forms */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+label.lbl{display:block;font-size:12px;color:#64748B;margin-bottom:6px;font-weight:500}
+input.inp,select.inp,textarea.inp{width:100%;padding:10px 12px;background:#0F172A;border:1px solid #334155;border-radius:8px;color:#E2E8F0;font-size:14px;font-family:inherit;outline:none}
+input.inp:focus,select.inp:focus{border-color:#3B82F6}
+/* detail grid */
+.detail-grid{display:grid;grid-template-columns:2fr 1fr;gap:20px}
+.state-times{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.time-box{background:#0F172A;border-radius:10px;padding:12px;border:1px solid #1E293B;transition:border-color .3s}
+.time-box.live{border-color:var(--c)!important}
+/* accion alerts */
+.accion{font-size:12px;padding:7px 10px;border-radius:7px;margin-bottom:5px}
+.accion.critica{background:#7F1D1D20;color:#FCA5A5;border:1px solid #7F1D1D60}
+.accion.advertencia{background:#78350F20;color:#FCD34D;border:1px solid #78350F60}
+.accion.ok{background:#052E1620;color:#6EE7B7;border:1px solid #052E1660}
+/* history */
+.hist-item{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px}
+.hist-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+/* velocity bar */
+.vel-bar-wrap{background:#0F172A;border-radius:8px;height:10px;overflow:hidden;margin:8px 0}
+.vel-bar{height:100%;border-radius:8px;transition:width .4s}
+/* empty state */
+.empty-state{padding:60px;text-align:center}
+/* modal overlay */
+#modal{position:fixed;inset:0;background:#00000080;z-index:200;display:none;align-items:center;justify-content:center}
+#modal.open{display:flex}
+#modal-box{background:#1E293B;border:1px solid #334155;border-radius:16px;padding:28px;width:90%;max-width:680px;max-height:90vh;overflow-y:auto}
+/* responsive */
+@media(max-width:700px){.kpi-grid{grid-template-columns:1fr 1fr}.form-grid{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}.state-times{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div id="hdr">
+  <div id="hdr-left">
+    <div id="logo">🏭</div>
+    <span style="font-weight:700;font-size:16px;letter-spacing:-.3px">ProducciónOps</span>
+    <div id="live-dot" class="pulse"></div>
+    <span id="conn-label" style="font-size:11px;color:#64748B;margin-left:4px">conectando…</span>
+  </div>
+  <div id="nav">
+    <input type="file" id="excel-input" accept=".xlsx,.xls" style="display:none"/>
+    <button class="btn" onclick="document.getElementById('excel-input').click()" style="padding:6px 14px;font-size:12px;background:#064E3B;color:#6EE7B7;border:1px solid #065F46">📂 Subir Excel</button>
+    <button class="nav-btn active" id="nav-dashboard" onclick="setView('dashboard')">📊 Dashboard</button>
+    <button class="nav-btn" id="nav-maquinas"  onclick="setView('maquinas')">🖥️ Por Máquina</button>
+    <button class="nav-btn" id="nav-ordenes"   onclick="setView('ordenes')">📋 Órdenes</button>
+    <button class="nav-btn" id="nav-nueva"     onclick="setView('nueva')">＋ Nueva Orden</button>
+  </div>
+</div>
+
+<!-- STATUS BAR -->
+<div id="status-bar"></div>
+
+<!-- MAIN -->
+<div id="main">
+  <div id="view-dashboard" class="fade-in"></div>
+  <div id="view-maquinas"  class="fade-in" style="display:none"></div>
+  <div id="view-ordenes"   class="fade-in" style="display:none"></div>
+  <div id="view-nueva"     class="fade-in" style="display:none"></div>
+  <div id="view-detalle"   class="fade-in" style="display:none"></div>
+</div>
+
+<!-- MODAL (ajuste) -->
+<div id="modal">
+  <div id="modal-box">
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;color:#F1F5F9">🔧 Registrar Ajuste</h3>
+    <div style="margin-bottom:12px">
+      <label class="lbl">Descripción del ajuste *</label>
+      <input id="aj-desc" class="inp" placeholder="Describe el ajuste realizado"/>
+    </div>
+    <div style="margin-bottom:20px">
+      <label class="lbl">Duración (minutos)</label>
+      <input id="aj-dur" class="inp" type="number" placeholder="0"/>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn" onclick="submitAjuste()" style="flex:1;padding:11px;background:#4C1D95;color:#fff;font-size:14px">Guardar Ajuste</button>
+      <button class="btn" onclick="closeModal()" style="padding:11px 18px;background:#0F172A;color:#94A3B8;border:1px solid #334155;font-size:13px">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════
+const MACHINES = ["Nilpeter 1","Nilpeter 2","Kromia"];
+const STATUS_CONFIG = {
+  setup:      {label:"Setup",      color:"#F59E0B",dark:"#92400E",bg:"#FEF3C7",icon:"⚙️"},
+  produccion: {label:"Producción", color:"#3B82F6",dark:"#1D4ED8",bg:"#EFF6FF",icon:"🏭"},
+  ajuste:     {label:"Ajuste",     color:"#8B5CF6",dark:"#4C1D95",bg:"#F5F3FF",icon:"🔧"},
+  pausada:    {label:"Pausada",    color:"#EF4444",dark:"#7F1D1D",bg:"#FEF2F2",icon:"⏸️"},
+  finalizada: {label:"Finalizada", color:"#10B981",dark:"#064E3B",bg:"#ECFDF5",icon:"✅"},
+};
+const STATUS_KEYS = ["setup","produccion","ajuste","pausada","finalizada"];
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+let orders   = [];
+let catalog  = [];
+let curView  = "dashboard";
+let detailId = null;
+let ajusteOid = null;
+let tickInterval = null;
+
+// ═══════════════════════════════════════════════
+// SSE — real-time connection
+// ═══════════════════════════════════════════════
+function connectSSE() {
+  const es = new EventSource("/stream");
+  es.addEventListener("init",   e => { onData(JSON.parse(e.data)); });
+  es.addEventListener("update", e => { onData(JSON.parse(e.data)); });
+  es.onopen  = () => setConnLabel(true);
+  es.onerror = () => { setConnLabel(false); setTimeout(connectSSE, 3000); es.close(); };
+}
+function setConnLabel(ok) {
+  document.getElementById("conn-label").textContent = ok ? "en vivo" : "reconectando…";
+  document.getElementById("conn-label").style.color  = ok ? "#10B981" : "#EF4444";
+  document.getElementById("live-dot").style.background = ok ? "#10B981" : "#EF4444";
+}
+function onData(data) {
+  orders = data.orders || [];
+  renderCurrent();
+}
+
+// ═══════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════
+function fmtTime(s) {
+  if (!s && s !== 0) return "—";
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+  if(h>0) return `${h}h ${m}m ${sec}s`;
+  if(m>0) return `${m}m ${sec}s`;
+  return `${sec}s`;
+}
+function fmtDT(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+}
+function velColor(p) { return p>=90?"#10B981":p>=70?"#F59E0B":"#EF4444"; }
+
+function computeTimes(order) {
+  const t={tSetup:0,tProduccion:0,tAjuste:0,tPausada:0,tFinalizada:0};
+  const keyMap={setup:"tSetup",produccion:"tProduccion",ajuste:"tAjuste",pausada:"tPausada",finalizada:"tFinalizada"};
+  const hist=order.history||[];
+  const now=Date.now();
+  for(let i=0;i<hist.length;i++){
+    const start=new Date(hist[i].at).getTime();
+    const end=hist[i+1]?new Date(hist[i+1].at).getTime():now;
+    const k=keyMap[hist[i].status];
+    if(k) t[k]+=Math.floor((end-start)/1000);
+  }
+  return t;
+}
+
+function getAcciones(o) {
+  const acc=[];
+  const vp=Number(o.velocidadObjetivo)>0?(Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100:0;
+  if(o.status==="pausada") acc.push({tipo:"critica",msg:"⚠️ Orden PAUSADA — verificar causa de paro"});
+  if(vp>0&&vp<70)  acc.push({tipo:"critica",msg:`🔴 Velocidad baja (${vp.toFixed(0)}%) — revisar proceso`});
+  else if(vp>0&&vp<90) acc.push({tipo:"advertencia",msg:`🟡 Velocidad al ${vp.toFixed(0)}% — optimizar`});
+  const tSetup=(computeTimes(o).tSetup||0);
+  if(tSetup>1800) acc.push({tipo:"advertencia",msg:`⏱️ Setup prolongado (${Math.floor(tSetup/60)} min) — analizar causa`});
+  if((o.ajustes?.length||0)>=3) acc.push({tipo:"critica",msg:`🔧 ${o.ajustes.length} ajustes — revisar estabilidad`});
+  if(acc.length===0&&o.status!=="finalizada") acc.push({tipo:"ok",msg:"✅ Ejecución dentro de parámetros"});
+  return acc;
+}
+
+function badge(status){
+  const c=STATUS_CONFIG[status]||STATUS_CONFIG.setup;
+  return `<span class="badge" style="background:${c.bg};color:${c.color}">${c.icon} ${c.label}</span>`;
+}
+
+// ═══════════════════════════════════════════════
+// VIEW ROUTER
+// ═══════════════════════════════════════════════
+function setView(v, oid) {
+  curView=v;
+  if(oid) detailId=oid;
+  ["dashboard","maquinas","ordenes","nueva","detalle"].forEach(x=>{
+    document.getElementById("view-"+x).style.display = x===v?"block":"none";
+  });
+  ["dashboard","maquinas","ordenes","nueva"].forEach(x=>{
+    const b=document.getElementById("nav-"+x);
+    if(b) b.classList.toggle("active", x===v);
+  });
+  renderCurrent();
+}
+function renderCurrent() {
+  if(curView==="dashboard") renderDashboard();
+  else if(curView==="maquinas")  renderMaquinas();
+  else if(curView==="ordenes")   renderOrdenes();
+  else if(curView==="nueva")     renderNueva();
+  else if(curView==="detalle")   renderDetalle();
+}
+
+// ═══════════════════════════════════════════════
+// LIVE TICK — re-render every second for timers
+// ═══════════════════════════════════════════════
+function startTick() {
+  if(tickInterval) clearInterval(tickInterval);
+  tickInterval=setInterval(()=>{ renderCurrent(); },1000);
+}
+
+// ═══════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════
+function renderDashboard() {
+  const active    = orders.filter(o=>o.status!=="finalizada").length;
+  const finaliz   = orders.filter(o=>o.status==="finalizada").length;
+  const enProd    = orders.filter(o=>o.status==="produccion").length;
+  const criticas  = orders.filter(o=>getAcciones(o).some(a=>a.tipo==="critica")).length;
+  const withVel   = orders.filter(o=>Number(o.velocidadObjetivo)>0);
+  const avgVel    = withVel.length>0
+    ? withVel.reduce((s,o)=>s+(Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100,0)/withVel.length : 0;
+
+  const kpis=[
+    {label:"Órdenes Activas",  val:active,           icon:"📋",color:"#3B82F6",    sub:`${finaliz} finalizadas`},
+    {label:"En Producción",    val:enProd,            icon:"🏭",color:"#10B981",    sub:"corriendo ahora"},
+    {label:"Eficiencia Prom.", val:`${avgVel.toFixed(0)}%`,icon:"⚡",color:velColor(avgVel),sub:"vs velocidad objetivo"},
+    {label:"Alertas Críticas", val:criticas,          icon:"🚨",color:criticas>0?"#EF4444":"#10B981",sub:criticas>0?"requieren atención":"sin alertas"},
+  ];
+
+  let html=`<div class="kpi-grid">`;
+  kpis.forEach(k=>{
+    html+=`<div class="card kpi"><div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div class="kpi-label">${k.label}</div>
+      <div class="kpi-val" style="color:${k.color}">${k.val}</div>
+      <div class="kpi-sub">${k.sub}</div></div>
+      <span class="kpi-icon">${k.icon}</span></div></div>`;
+  });
+  html+=`</div>`;
+
+  if(orders.length===0){
+    html+=`<div class="card empty-state"><div style="font-size:48px;margin-bottom:16px">🏭</div>
+      <div style="font-size:18px;font-weight:600;color:#94A3B8;margin-bottom:8px">Sin órdenes de producción</div>
+      <div style="color:#475569;margin-bottom:24px">Crea la primera orden o sube el catálogo Excel</div>
+      <button class="btn" onclick="setView('nueva')" style="padding:10px 24px;background:#3B82F6;color:#fff;font-size:14px">＋ Nueva Orden</button></div>`;
+  } else {
+    html+=`<div class="orders-grid">`;
+    orders.forEach(order=>{
+      const t=computeTimes(order);
+      const vp=Number(order.velocidadObjetivo)>0?Math.min((Number(order.velocidadActual)/Number(order.velocidadObjetivo))*100,100):0;
+      const vc=velColor(vp);
+      const acc=getAcciones(order);
+      const cfg=STATUS_CONFIG[order.status]||STATUS_CONFIG.setup;
+      const circ=2*Math.PI*28;
+      const offset=circ-(vp/100)*circ;
+      const isAlert=acc.some(a=>a.tipo==="critica");
+
+      const timeRows=STATUS_KEYS.map(k=>{
+        const tc=STATUS_CONFIG[k];
+        return `<div style="background:#0F172A;border-radius:7px;padding:6px 8px;border:1px solid ${order.status===k?tc.color+"80":"#0F172A"}">
+          <div style="font-size:9px;color:#64748B">${tc.icon} ${tc.label}</div>
+          <div style="font-size:12px;font-weight:600;font-family:'JetBrains Mono',monospace;color:${tc.color};margin-top:2px">${fmtTime(t["t"+k.charAt(0).toUpperCase()+k.slice(1)])}</div>
+        </div>`;
+      }).join("");
+
+      const accHtml=acc.map(a=>`<div class="accion ${a.tipo}">${a.msg}</div>`).join("");
+
+      const btns=STATUS_KEYS.filter(k=>k!==order.status).map(k=>{
+        const sc=STATUS_CONFIG[k];
+        return `<button class="btn" onclick="patchStatus('${order.id}','${k}')" style="padding:4px 10px;font-size:11px;background:${sc.dark};color:#fff">${sc.icon}</button>`;
+      }).join("");
+
+      html+=`<div class="card order-card ${isAlert?"alert":""}" style="border-color:${isAlert?"#EF444440":"#334155"}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+          <div>
+            <div style="font-size:11px;color:#64748B;font-family:'JetBrains Mono',monospace">${order.ordenId}</div>
+            <div style="font-size:16px;font-weight:700;color:#F1F5F9;margin-top:2px">${order.producto}</div>
+            ${order.maquina?`<div style="font-size:11px;color:#8B5CF6;margin-top:3px">🖥️ ${order.maquina}</div>`:""}
+            ${order.cliente?`<div style="font-size:11px;color:#64748B;margin-top:1px">👤 ${order.cliente}</div>`:""}
+          </div>${badge(order.status)}</div>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
+          <svg width="68" height="68" viewBox="0 0 72 72" style="flex-shrink:0">
+            <circle cx="36" cy="36" r="28" fill="none" stroke="#1E293B" stroke-width="6"/>
+            <circle cx="36" cy="36" r="28" fill="none" stroke="${vc}" stroke-width="6"
+              stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}"
+              stroke-linecap="round" transform="rotate(-90 36 36)" style="transition:stroke-dashoffset .6s"/>
+            <text x="36" y="40" text-anchor="middle" fill="${vc}" font-size="12" font-weight="700" font-family="JetBrains Mono,monospace">${vp.toFixed(0)}%</text>
+          </svg>
+          <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px">${timeRows}</div>
+        </div>
+        <div style="margin-bottom:12px">${accHtml}</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          ${btns}
+          <button class="btn" onclick="setView('detalle','${order.id}')" style="padding:4px 10px;font-size:11px;background:#1E293B;color:#94A3B8;border:1px solid #334155;margin-left:auto">Ver →</button>
+        </div>
+      </div>`;
+    });
+    html+=`</div>`;
+  }
+  document.getElementById("view-dashboard").innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════
+// POR MÁQUINA
+// ═══════════════════════════════════════════════
+function renderMaquinas() {
+  let html=`<h2 style="font-size:20px;font-weight:700;margin-bottom:20px">🖥️ Tablero por Máquina</h2>
+    <div class="maq-grid">`;
+
+  MACHINES.forEach(m=>{
+    const mos=orders.filter(o=>o.maquina===m);
+    const times=mos.reduce((acc,o)=>{
+      const t=computeTimes(o);
+      Object.keys(t).forEach(k=>{ acc[k]=(acc[k]||0)+t[k]; });
+      return acc;
+    },{});
+    const total=Object.values(times).reduce((a,b)=>a+b,0)||1;
+    const withVel=mos.filter(o=>Number(o.velocidadObjetivo)>0);
+    const ef=withVel.length>0
+      ? withVel.reduce((s,o)=>s+(Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100,0)/withVel.length : null;
+    const active=mos.filter(o=>o.status!=="finalizada").length;
+
+    const stateRows=STATUS_KEYS.map(k=>{
+      const tc=STATUS_CONFIG[k];
+      const tKey="t"+k.charAt(0).toUpperCase()+k.slice(1);
+      const secs=times[tKey]||0;
+      const pct=((secs/total)*100);
+      return `<div style="background:#0F172A;border-radius:8px;padding:10px 12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:11px;color:${tc.color};font-weight:600">${tc.icon} ${tc.label}</span>
+          <span style="font-size:11px;color:#64748B">${pct.toFixed(0)}%</span>
+        </div>
+        <div style="background:#1E293B;border-radius:4px;height:6px;overflow:hidden;margin-bottom:4px">
+          <div style="width:${pct}%;background:${tc.color};height:100%;border-radius:4px;transition:width .4s"></div>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:${tc.color};font-family:'JetBrains Mono',monospace">${fmtTime(secs)}</div>
+      </div>`;
+    }).join("");
+
+    const orderRows=mos.map(o=>{
+      const cfg=STATUS_CONFIG[o.status]||STATUS_CONFIG.setup;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#0F172A;border-radius:8px;margin-bottom:6px;cursor:pointer"
+          onclick="setView('detalle','${o.id}')">
+        <div>
+          <span style="font-size:12px;font-family:'JetBrains Mono',monospace;color:#94A3B8">${o.ordenId} </span>
+          <span style="font-size:13px;font-weight:600;color:#E2E8F0">${o.producto}</span>
+        </div>
+        ${badge(o.status)}
+      </div>`;
+    }).join("");
+
+    html+=`<div class="card" style="padding:24px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:#F1F5F9">${m}</div>
+          <div style="font-size:12px;color:#64748B;margin-top:2px">${mos.length} órdenes · ${active} activas</div>
+        </div>
+        ${ef!==null?`<div style="text-align:center">
+          <div style="font-size:26px;font-weight:700;color:${velColor(ef)};font-family:'JetBrains Mono',monospace">${ef.toFixed(0)}%</div>
+          <div style="font-size:10px;color:#64748B">eficiencia</div>
+        </div>`:""}
+      </div>
+      <div style="font-size:11px;color:#64748B;margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Tiempo acumulado por estado</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">${stateRows}</div>
+      ${mos.length>0?`<div style="font-size:11px;color:#64748B;margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Órdenes</div>${orderRows}`
+        :`<div style="font-size:13px;color:#475569;text-align:center;padding:16px">Sin órdenes asignadas</div>`}
+    </div>`;
+  });
+
+  html+=`</div>`;
+  document.getElementById("view-maquinas").innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════
+// TABLA ÓRDENES
+// ═══════════════════════════════════════════════
+function renderOrdenes() {
+  let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+    <h2 style="font-size:20px;font-weight:700">📋 Todas las Órdenes</h2>
+    <button class="btn" onclick="setView('nueva')" style="padding:8px 20px;background:#3B82F6;color:#fff;font-size:13px">＋ Nueva</button>
+  </div>`;
+
+  if(orders.length===0){
+    html+=`<div class="card" style="padding:40px;text-align:center;color:#475569">Sin órdenes registradas</div>`;
+  } else {
+    html+=`<div class="card" style="overflow:auto"><table class="tbl">
+      <thead><tr>${["Orden","Producto","Máquina","Estado","Setup","Producción","Ajuste","Pausada","Finalizada","Efic.",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+      <tbody>`;
+    orders.forEach((o,i)=>{
+      const t=computeTimes(o);
+      const vp=Number(o.velocidadObjetivo)>0?(Number(o.velocidadActual)/Number(o.velocidadObjetivo)*100).toFixed(0):"—";
+      html+=`<tr>
+        <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8">${o.ordenId}</td>
+        <td style="font-weight:600;color:#E2E8F0">${o.producto}</td>
+        <td style="color:#8B5CF6;font-size:11px">${o.maquina||"—"}</td>
+        <td>${badge(o.status)}</td>
+        <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;font-size:11px">${fmtTime(t.tSetup)}</td>
+        <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;font-size:11px">${fmtTime(t.tProduccion)}</td>
+        <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;font-size:11px">${fmtTime(t.tAjuste)}</td>
+        <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;font-size:11px">${fmtTime(t.tPausada)}</td>
+        <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;font-size:11px">${fmtTime(t.tFinalizada)}</td>
+        <td>${vp!=="—"?`<span style="color:${velColor(Number(vp))};font-weight:700">${vp}%</span>`:"—"}</td>
+        <td><button class="btn" onclick="setView('detalle','${o.id}')" style="padding:4px 10px;font-size:11px;background:#1E293B;color:#94A3B8;border:1px solid #334155">Ver →</button></td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  }
+  document.getElementById("view-ordenes").innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════
+// NUEVA ORDEN
+// ═══════════════════════════════════════════════
+function renderNueva() {
+  const catInfo=catalog.length>0
+    ?`<div style="background:#052E16;border:1px solid #065F46;border-radius:10px;padding:10px 16px;margin-bottom:16px;font-size:12px;color:#6EE7B7">
+        📂 Catálogo activo: <strong>${catalog.length}</strong> órdenes · Escribe el # y el sistema autocompletará los datos
+      </div>`:
+    `<div style="background:#1E293B;border:1px solid #334155;border-radius:10px;padding:10px 16px;margin-bottom:16px;font-size:12px;color:#64748B">
+        💡 Sube un Excel con tu catálogo de órdenes para autocompletado automático
+      </div>`;
+
+  const statusOpts=["setup","produccion","ajuste","pausada"].map(k=>{
+    const c=STATUS_CONFIG[k];
+    return `<option value="${k}">${c.icon} ${c.label}</option>`;
+  }).join("");
+
+  const machineOpts=`<option value="">— Seleccionar máquina —</option>`+MACHINES.map(m=>`<option value="${m}">${m}</option>`).join("");
+
+  document.getElementById("view-nueva").innerHTML=`
+    <div style="max-width:640px">
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:24px;color:#F1F5F9">＋ Nueva Orden de Producción</h2>
+      ${catInfo}
+      <div class="card" style="padding:28px">
+        <div class="form-grid">
+          <div>
+            <label class="lbl"># Orden * ${catalog.length>0?'<span style="color:#10B981">↵ autocompletará</span>':''}</label>
+            <input id="f-ordenId" class="inp" placeholder="Ej. OP-001" oninput="autofillOrder(this.value)"/>
+          </div>
+          <div><label class="lbl">Producto *</label><input id="f-producto" class="inp" placeholder="Nombre del producto"/></div>
+          <div><label class="lbl">Cliente</label><input id="f-cliente" class="inp" placeholder="Nombre del cliente"/></div>
+          <div><label class="lbl">Cantidad objetivo</label><input id="f-cantidad" class="inp" type="number" placeholder="0"/></div>
+          <div><label class="lbl">Vel. Objetivo (uds/hr)</label><input id="f-velObj" class="inp" type="number" placeholder="0"/></div>
+          <div><label class="lbl">Vel. Actual (uds/hr)</label><input id="f-velAct" class="inp" type="number" placeholder="0"/></div>
+          <div><label class="lbl">Máquina</label><select id="f-maquina" class="inp">${machineOpts}</select></div>
+          <div><label class="lbl">Estado inicial</label><select id="f-status" class="inp">${statusOpts}</select></div>
+          <div style="grid-column:span 2"><label class="lbl">Notas</label>
+            <textarea id="f-notas" class="inp" rows="3" placeholder="Observaciones iniciales…"></textarea></div>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:24px">
+          <button class="btn" onclick="submitOrder()" style="flex:1;padding:12px;background:linear-gradient(135deg,#3B82F6,#6366F1);color:#fff;font-size:15px">＋ Crear Orden</button>
+          <button class="btn" onclick="setView('dashboard')" style="padding:12px 20px;background:#1E293B;color:#94A3B8;border:1px solid #334155;font-size:14px">Cancelar</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function autofillOrder(val) {
+  if(!val||catalog.length===0) return;
+  const norm=s=>String(s).toLowerCase().trim();
+  const found=catalog.find(r=>norm(r.ordenId)===norm(val));
+  if(!found) return;
+  if(found.producto)          document.getElementById("f-producto").value=found.producto;
+  if(found.cliente)           document.getElementById("f-cliente").value=found.cliente;
+  if(found.cantidad)          document.getElementById("f-cantidad").value=found.cantidad;
+  if(found.velocidadObjetivo) document.getElementById("f-velObj").value=found.velocidadObjetivo;
+  if(found.maquina){
+    const sel=document.getElementById("f-maquina");
+    for(let i=0;i<sel.options.length;i++){
+      if(sel.options[i].value===found.maquina){sel.selectedIndex=i;break;}
+    }
+  }
+}
+
+async function submitOrder() {
+  const ordenId=document.getElementById("f-ordenId").value.trim();
+  const producto=document.getElementById("f-producto").value.trim();
+  if(!ordenId||!producto){ alert("# Orden y Producto son obligatorios"); return; }
+  const body={
+    ordenId, producto,
+    cliente:  document.getElementById("f-cliente").value.trim(),
+    maquina:  document.getElementById("f-maquina").value,
+    cantidad: Number(document.getElementById("f-cantidad").value)||0,
+    velocidadObjetivo: Number(document.getElementById("f-velObj").value)||0,
+    velocidadActual:   Number(document.getElementById("f-velAct").value)||0,
+    notas:    document.getElementById("f-notas").value.trim(),
+    status:   document.getElementById("f-status").value,
+  };
+  await fetch("/api/orders",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  setView("dashboard");
+}
+
+// ═══════════════════════════════════════════════
+// DETALLE ORDEN
+// ═══════════════════════════════════════════════
+function renderDetalle() {
+  const order=orders.find(o=>o.id===detailId);
+  if(!order){ document.getElementById("view-detalle").innerHTML=`<div style="color:#64748B">Orden no encontrada</div>`; return; }
+
+  const t=computeTimes(order);
+  const vp=Number(order.velocidadObjetivo)>0?Math.min((Number(order.velocidadActual)/Number(order.velocidadObjetivo))*100,100):0;
+  const acc=getAcciones(order);
+  const cfg=STATUS_CONFIG[order.status]||STATUS_CONFIG.setup;
+
+  // State time boxes
+  const timeBoxes=STATUS_KEYS.map(k=>{
+    const tc=STATUS_CONFIG[k];
+    const tKey="t"+k.charAt(0).toUpperCase()+k.slice(1);
+    const live=order.status===k;
+    return `<div class="time-box${live?" live":""}" style="--c:${tc.color};${live?"border-color:"+tc.color:""}">
+      ${live?`<div style="width:7px;height:7px;background:${tc.color};border-radius:50%;margin-bottom:6px" class="pulse"></div>`:""}
+      <div style="font-size:10px;color:#64748B;margin-bottom:4px">${tc.icon} ${tc.label}</div>
+      <div style="font-size:16px;font-weight:700;color:${tc.color};font-family:'JetBrains Mono',monospace">${fmtTime(t[tKey])}</div>
+    </div>`;
+  }).join("");
+
+  // History
+  const hist=order.history||[];
+  const histHtml=hist.map((h,i)=>{
+    const next=hist[i+1];
+    const dur=next?Math.floor((new Date(next.at)-new Date(h.at))/1000):null;
+    const hc=STATUS_CONFIG[h.status]||STATUS_CONFIG.setup;
+    return `<div class="hist-item">
+      <div class="hist-dot" style="background:${hc.dark}">${hc.icon}</div>
+      <div style="flex:1">
+        <div style="display:flex;justify-content:space-between">
+          <span style="font-size:13px;font-weight:600;color:${hc.color}">${hc.label}</span>
+          <span style="font-size:11px;color:#475569;font-family:'JetBrains Mono',monospace">${fmtDT(h.at)}</span>
+        </div>
+        ${dur!==null?`<div style="font-size:11px;color:#64748B">Duración: ${fmtTime(dur)}</div>`:""}
+      </div>
+    </div>`;
+  }).join("");
+
+  // Acciones
+  const accHtml=acc.map(a=>`<div class="accion ${a.tipo}">${a.msg}</div>`).join("");
+
+  // Status buttons
+  const statusBtns=STATUS_KEYS.map(k=>{
+    const sc=STATUS_CONFIG[k];
+    const isCur=order.status===k;
+    return `<button class="btn" onclick="patchStatus('${order.id}','${k}')" ${isCur?"disabled":""}
+      style="padding:10px;font-size:13px;text-align:left;width:100%;background:${isCur?sc.color:"#0F172A"};color:${isCur?"#fff":"#94A3B8"};border:1px solid ${isCur?sc.color:"#334155"};opacity:${isCur?"1":".85"}">
+      ${sc.icon} ${sc.label} ${isCur?"← actual":""}
+    </button>`;
+  }).join("");
+
+  // Ajustes list
+  const ajList=(order.ajustes||[]).length>0
+    ? (order.ajustes||[]).map(a=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#0F172A;border-radius:8px;margin-bottom:6px">
+          <div><span style="font-size:13px;color:#E2E8F0">${a.descripcion}</span>
+            ${a.duracion?`<span style="font-size:11px;color:#64748B;margin-left:8px">(${a.duracion} min)</span>`:""}</div>
+          <span style="font-size:11px;color:#475569;font-family:'JetBrains Mono',monospace">${fmtDT(a.at)}</span>
+        </div>`).join("")
+    : `<div style="color:#475569;font-size:13px;text-align:center;padding:16px">Sin ajustes registrados</div>`;
+
+  document.getElementById("view-detalle").innerHTML=`
+    <div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap">
+        <button class="btn" onclick="setView('dashboard')" style="padding:6px 14px;font-size:13px;background:#1E293B;color:#94A3B8;border:1px solid #334155">← Volver</button>
+        <h2 style="font-size:20px;font-weight:700">${order.producto}</h2>
+        <span style="font-family:'JetBrains Mono',monospace;color:#64748B;font-size:13px">${order.ordenId}</span>
+        ${order.maquina?`<span style="font-size:12px;color:#8B5CF6;background:#1E1B4B;padding:3px 10px;border-radius:20px;border:1px solid #4C1D95">🖥️ ${order.maquina}</span>`:""}
+        ${order.cliente?`<span style="font-size:12px;color:#64748B">👤 ${order.cliente}</span>`:""}
+        ${badge(order.status)}
+      </div>
+
+      <div class="detail-grid">
+        <div>
+          <!-- Tiempos -->
+          <div class="card" style="padding:20px;margin-bottom:16px">
+            <h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">⏱️ Tiempos por Estado</h3>
+            <div class="state-times">${timeBoxes}</div>
+          </div>
+          <!-- Historial -->
+          <div class="card" style="padding:20px;margin-bottom:16px">
+            <h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">📅 Historial de Estados</h3>
+            <div style="max-height:180px;overflow:auto">${histHtml}</div>
+          </div>
+          <!-- Velocidad -->
+          <div class="card" style="padding:20px;margin-bottom:16px">
+            <h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">⚡ Velocidad</h3>
+            <div style="display:flex;align-items:center;gap:16px">
+              <div style="flex:1">
+                <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                  <span style="font-size:12px;color:#64748B">Actual: <strong style="color:#E2E8F0">${order.velocidadActual||0}</strong> uds/hr</span>
+                  <span style="font-size:12px;color:#64748B">Objetivo: <strong style="color:#E2E8F0">${order.velocidadObjetivo||0}</strong> uds/hr</span>
+                </div>
+                <div class="vel-bar-wrap"><div class="vel-bar" style="width:${vp}%;background:${velColor(vp)}"></div></div>
+                <div style="text-align:right;font-size:12px;margin-top:4px;color:${velColor(vp)};font-weight:700">${vp.toFixed(0)}%</div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input id="vel-inp" type="number" value="${order.velocidadActual||0}"
+                  style="width:90px;padding:8px 10px;background:#0F172A;border:1px solid #334155;border-radius:8px;color:#E2E8F0;font-size:14px;font-family:inherit"/>
+                <button class="btn" onclick="patchVel('${order.id}')" style="padding:8px 14px;background:#1D4ED8;color:#fff;font-size:13px">Actualizar</button>
+              </div>
+            </div>
+          </div>
+          <!-- Ajustes -->
+          <div class="card" style="padding:20px">
+            <h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">🔧 Ajustes</h3>
+            <button class="btn" onclick="openModal('${order.id}')" style="padding:8px 16px;background:#4C1D95;color:#fff;font-size:13px;margin-bottom:14px">＋ Registrar Ajuste</button>
+            ${ajList}
+          </div>
+        </div>
+        <!-- Right -->
+        <div>
+          <div class="card" style="padding:20px;margin-bottom:16px">
+            <h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">🎛️ Control de Estado</h3>
+            <div style="display:flex;flex-direction:column;gap:8px">${statusBtns}</div>
+          </div>
+          <div class="card" style="padding:20px">
+            <h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">🎯 Acciones Recomendadas</h3>
+            ${accHtml}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════
+// API CALLS
+// ═══════════════════════════════════════════════
+async function patchStatus(id, status) {
+  await fetch(`/api/orders/${id}/status`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});
+}
+async function patchVel(id) {
+  const vel=Number(document.getElementById("vel-inp").value)||0;
+  await fetch(`/api/orders/${id}/velocidad`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({velocidadActual:vel})});
+}
+
+// ── Modal ajuste ──
+function openModal(oid) {
+  ajusteOid=oid;
+  document.getElementById("aj-desc").value="";
+  document.getElementById("aj-dur").value="";
+  document.getElementById("modal").classList.add("open");
+}
+function closeModal() { document.getElementById("modal").classList.remove("open"); ajusteOid=null; }
+async function submitAjuste() {
+  const desc=document.getElementById("aj-desc").value.trim();
+  if(!desc||!ajusteOid) return;
+  const dur=document.getElementById("aj-dur").value;
+  await fetch(`/api/orders/${ajusteOid}/ajuste`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({descripcion:desc,duracion:dur})});
+  closeModal();
+}
+document.getElementById("modal").addEventListener("click",e=>{ if(e.target===document.getElementById("modal")) closeModal(); });
+
+// ── Excel upload ──
+document.getElementById("excel-input").addEventListener("change",async function(e){
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=async ev=>{
+    try{
+      const wb=XLSX.read(ev.target.result,{type:"binary"});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+      const normalize=s=>String(s).toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g,"");
+      const mapped=rows.map(row=>{
+        const norm={}; Object.entries(row).forEach(([k,v])=>{norm[normalize(k)]=v;});
+        return {
+          ordenId:          norm["orden"]||norm["#orden"]||norm["id"]||norm["norden"]||norm["numeroorden"]||"",
+          producto:         norm["producto"]||norm["descripcion"]||norm["articulo"]||"",
+          cliente:          norm["cliente"]||norm["customer"]||"",
+          cantidad:         Number(norm["cantidad"]||norm["qty"]||norm["piezas"]||0),
+          velocidadObjetivo:Number(norm["velocidad"]||norm["velocidadobjetivo"]||norm["velobj"]||0),
+          maquina:          norm["maquina"]||norm["machine"]||norm["equipo"]||"",
+        };
+      }).filter(r=>r.ordenId!=="");
+      await fetch("/api/catalog",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({rows:mapped})});
+      catalog=mapped;
+      showStatusBar(`✅ ${mapped.length} órdenes cargadas desde "${file.name}"`, true);
+    }catch(err){ showStatusBar("❌ Error leyendo el archivo. Verifica que sea .xlsx válido.", false); }
+  };
+  reader.readAsBinaryString(file);
+  e.target.value="";
+});
+
+function showStatusBar(msg, ok) {
+  const bar=document.getElementById("status-bar");
+  bar.style.display="flex";
+  bar.style.background=ok?"#052E16":"#450A0A";
+  bar.style.color=ok?"#6EE7B7":"#FCA5A5";
+  bar.style.borderBottom="1px solid #334155";
+  bar.innerHTML=`<span>${msg}</span><span style="cursor:pointer;color:#64748B" onclick="this.parentElement.style.display='none'">✕</span>`;
+}
+
+// ── Load catalog on start ──
+async function loadCatalog() {
+  try{
+    const r=await fetch("/api/catalog");
+    const d=await r.json();
+    catalog=d.catalog||[];
+  }catch(e){}
+}
+
+// ═══════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════
+connectSSE();
+loadCatalog();
+startTick();
+</script>
+</body>
+</html>
