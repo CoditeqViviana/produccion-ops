@@ -1,33 +1,75 @@
 from flask import Flask, jsonify, request, render_template, Response
-import json, uuid, time, threading
-from datetime import datetime
+import json, uuid, time, threading, os
+from datetime import datetime, timezone, timedelta
 
 app = Flask(__name__)
 
-# ── In-memory state ──────────────────────────────────────────────────────────
-state = {
-    "orders": [],        # list of order dicts
-    "catalog": [],       # uploaded Excel catalog
-    "updated_at": None,
-}
-state_lock = threading.Lock()
-subscribers = []         # SSE clients
-subs_lock   = threading.Lock()
+# ── PostgreSQL connection ────────────────────────────────────────────────────
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+
+def get_db():
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    return conn
+
+def init_db():
+    """Create tables if they don't exist."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS orders (
+                    id TEXT PRIMARY KEY,
+                    data JSONB NOT NULL,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                );
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS catalog (
+                    id SERIAL PRIMARY KEY,
+                    data JSONB NOT NULL,
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                );
+            """)
+        conn.commit()
 
 # ── SSE broadcast ────────────────────────────────────────────────────────────
-def broadcast(event="update"):
-    with state_lock:
-        data = json.dumps({"orders": state["orders"], "updated_at": state["updated_at"]})
-    msg = f"event: {event}\ndata: {data}\n\n"
+subscribers = []
+subs_lock   = threading.Lock()
+
+def get_all_orders():
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT data FROM orders ORDER BY (data->>'createdAt') ASC")
+                rows = cur.fetchall()
+                return [r["data"] for r in rows]
+    except Exception as e:
+        print("DB error get_orders:", e)
+        return []
+
+def broadcast():
+    orders = get_all_orders()
+    data = json.dumps({"orders": orders, "updated_at": datetime.utcnow().isoformat()})
+    msg = f"event: update\ndata: {data}\n\n"
     with subs_lock:
         dead = []
         for q in subscribers:
-            try:
-                q.append(msg)
-            except Exception:
-                dead.append(q)
+            try:    q.append(msg)
+            except: dead.append(q)
         for q in dead:
             subscribers.remove(q)
+
+# ── Colombia timezone helper ─────────────────────────────────────────────────
+def get_turno_colombia():
+    tz_col = timezone(timedelta(hours=-5))
+    now_col = datetime.now(timezone.utc).astimezone(tz_col)
+    h = now_col.hour
+    if 6 <= h < 14:    return "T1 (06:00-14:00)"
+    elif 14 <= h < 22: return "T2 (14:00-22:00)"
+    else:              return "T3 (22:00-06:00)"
 
 # ── Routes ───────────────────────────────────────────────────────────────────
 @app.route("/")
@@ -36,46 +78,35 @@ def index():
 
 @app.route("/stream")
 def stream():
-    """SSE endpoint — pushes updates to all connected clients."""
     q = []
     with subs_lock:
         subscribers.append(q)
-    # Send current state immediately on connect
-    with state_lock:
-        initial = json.dumps({"orders": state["orders"], "updated_at": state["updated_at"]})
+    orders = get_all_orders()
+    initial = json.dumps({"orders": orders, "updated_at": datetime.utcnow().isoformat()})
     q.append(f"event: init\ndata: {initial}\n\n")
 
     def generate():
         try:
             while True:
-                if q:
-                    yield q.pop(0)
+                if q:   yield q.pop(0)
                 else:
                     yield ": ping\n\n"
                     time.sleep(2)
         except GeneratorExit:
             with subs_lock:
-                if q in subscribers:
-                    subscribers.remove(q)
+                if q in subscribers: subscribers.remove(q)
+
     return Response(generate(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 @app.route("/api/orders", methods=["GET"])
 def get_orders():
-    with state_lock:
-        return jsonify({"orders": state["orders"], "updated_at": state["updated_at"]})
+    return jsonify({"orders": get_all_orders()})
 
 @app.route("/api/orders", methods=["POST"])
 def create_order():
     data = request.json
     now  = datetime.utcnow().isoformat() + "Z"
-    # Compute turno from creation time
-    from datetime import datetime as dt2
-    hour = dt2.fromisoformat(now.replace("Z","")).hour
-    if 6 <= hour < 14:   turno = "T1 (06:00-14:00)"
-    elif 14 <= hour < 22: turno = "T2 (14:00-22:00)"
-    else:                 turno = "T3 (22:00-06:00)"
-
     order = {
         "id":                str(uuid.uuid4()),
         "ordenId":           data.get("ordenId", ""),
@@ -83,7 +114,7 @@ def create_order():
         "cliente":           data.get("cliente", ""),
         "maquina":           data.get("maquina", ""),
         "operario":          data.get("operario", ""),
-        "turno":             turno,
+        "turno":             get_turno_colombia(),
         "cantidad":          data.get("cantidad", 0),
         "velocidadObjetivo": data.get("velocidadObjetivo", 0),
         "velocidadActual":   data.get("velocidadActual", 0),
@@ -93,9 +124,16 @@ def create_order():
         "ajustes":           [],
         "history":           [{"status": data.get("status", "setup"), "at": now}],
     }
-    with state_lock:
-        state["orders"].append(order)
-        state["updated_at"] = now
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO orders (id, data) VALUES (%s, %s)",
+                    (order["id"], json.dumps(order))
+                )
+            conn.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     broadcast()
     return jsonify(order), 201
 
@@ -103,26 +141,45 @@ def create_order():
 def update_status(oid):
     new_status = request.json.get("status")
     now = datetime.utcnow().isoformat() + "Z"
-    with state_lock:
-        for o in state["orders"]:
-            if o["id"] == oid:
-                o["status"]  = new_status
-                o["history"] = o.get("history", []) + [{"status": new_status, "at": now}]
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT data FROM orders WHERE id=%s", (oid,))
+                row = cur.fetchone()
+                if not row: return jsonify({"error": "not found"}), 404
+                order = row["data"]
+                order["status"]  = new_status
+                order["history"] = order.get("history", []) + [{"status": new_status, "at": now}]
                 if new_status == "finalizada":
-                    o["finalizadaAt"] = now
-        state["updated_at"] = now
+                    order["finalizadaAt"] = now
+                cur.execute(
+                    "UPDATE orders SET data=%s, updated_at=NOW() WHERE id=%s",
+                    (json.dumps(order), oid)
+                )
+            conn.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     broadcast()
     return jsonify({"ok": True})
 
 @app.route("/api/orders/<oid>/velocidad", methods=["PATCH"])
 def update_velocidad(oid):
     vel = request.json.get("velocidadActual", 0)
-    now = datetime.utcnow().isoformat() + "Z"
-    with state_lock:
-        for o in state["orders"]:
-            if o["id"] == oid:
-                o["velocidadActual"] = vel
-        state["updated_at"] = now
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT data FROM orders WHERE id=%s", (oid,))
+                row = cur.fetchone()
+                if not row: return jsonify({"error": "not found"}), 404
+                order = row["data"]
+                order["velocidadActual"] = vel
+                cur.execute(
+                    "UPDATE orders SET data=%s, updated_at=NOW() WHERE id=%s",
+                    (json.dumps(order), oid)
+                )
+            conn.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     broadcast()
     return jsonify({"ok": True})
 
@@ -130,26 +187,60 @@ def update_velocidad(oid):
 def add_ajuste(oid):
     data = request.json
     now  = datetime.utcnow().isoformat() + "Z"
-    ajuste = {"descripcion": data.get("descripcion",""), "duracion": data.get("duracion",""), "at": now}
-    with state_lock:
-        for o in state["orders"]:
-            if o["id"] == oid:
-                o.setdefault("ajustes", []).append(ajuste)
-        state["updated_at"] = now
+    ajuste = {
+        "descripcion": data.get("descripcion", ""),
+        "duracion":    data.get("duracion", ""),
+        "reporta":     data.get("reporta", ""),
+        "at":          now
+    }
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT data FROM orders WHERE id=%s", (oid,))
+                row = cur.fetchone()
+                if not row: return jsonify({"error": "not found"}), 404
+                order = row["data"]
+                order.setdefault("ajustes", []).append(ajuste)
+                cur.execute(
+                    "UPDATE orders SET data=%s, updated_at=NOW() WHERE id=%s",
+                    (json.dumps(order), oid)
+                )
+            conn.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     broadcast()
     return jsonify({"ok": True})
 
 @app.route("/api/catalog", methods=["POST"])
 def upload_catalog():
     rows = request.json.get("rows", [])
-    with state_lock:
-        state["catalog"] = rows
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM catalog")
+                if rows:
+                    cur.execute(
+                        "INSERT INTO catalog (data) VALUES (%s)",
+                        (json.dumps(rows),)
+                    )
+            conn.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     return jsonify({"ok": True, "count": len(rows)})
 
 @app.route("/api/catalog", methods=["GET"])
 def get_catalog():
-    with state_lock:
-        return jsonify({"catalog": state["catalog"]})
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT data FROM catalog ORDER BY id DESC LIMIT 1")
+                row = cur.fetchone()
+                catalog = row["data"] if row else []
+                return jsonify({"catalog": catalog})
+    except Exception as e:
+        return jsonify({"catalog": [], "error": str(e)})
 
 if __name__ == "__main__":
+    if DATABASE_URL:
+        init_db()
     app.run(debug=True, threaded=True, host="0.0.0.0", port=5000)
