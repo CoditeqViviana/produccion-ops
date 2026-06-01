@@ -98,6 +98,7 @@ input.inp:focus,select.inp:focus{border-color:#3B82F6}
     <button class="nav-btn" id="nav-maquinas"  onclick="setView('maquinas')">🖥️ Por Máquina</button>
     <button class="nav-btn" id="nav-ordenes"   onclick="setView('ordenes')">📋 Órdenes</button>
     <button class="nav-btn" id="nav-nueva"     onclick="setView('nueva')">＋ Nueva Orden</button>
+    <button class="nav-btn" id="nav-reporte"   onclick="setView('reporte')">📈 Reporte</button>
   </div>
 </div>
 
@@ -111,6 +112,7 @@ input.inp:focus,select.inp:focus{border-color:#3B82F6}
   <div id="view-ordenes"   class="fade-in" style="display:none"></div>
   <div id="view-nueva"     class="fade-in" style="display:none"></div>
   <div id="view-detalle"   class="fade-in" style="display:none"></div>
+  <div id="view-reporte"   class="fade-in" style="display:none"></div>
 </div>
 
 <!-- MODAL (ajuste) -->
@@ -144,6 +146,32 @@ const STATUS_CONFIG = {
   finalizada: {label:"Finalizada", color:"#10B981",dark:"#064E3B",bg:"#ECFDF5",icon:"✅"},
 };
 const STATUS_KEYS = ["setup","ajuste","produccion","finalizada"];
+
+const OPERARIOS = [
+  "ALONSO RIOS MANUEL RICARDO",
+  "ANAYA BASTIDAS WILMER",
+  "CHAGUALA YAIMA LEONEL ANDRES",
+  "CORTES PINZON ULISES",
+  "CUELLAR MORA ANDRES ANTONIO",
+  "DONCEL AVENDAÑO ERNESTO",
+  "LIZARAZO MONTOYA OSCAR JAVIER",
+  "MOLINA CHITIVA JULIAN DAVID",
+  "OSORIO MUÑOZ GLEIBER JOSE",
+  "SERRANO CARDENAS ANDRES FABIAN",
+];
+
+function getTurno(isoDate) {
+  // T1: 06:00-14:00, T2: 14:00-22:00, T3: 22:00-06:00
+  const d = new Date(isoDate);
+  const h = d.getHours();
+  if (h >= 6  && h < 14) return "T1 (06:00–14:00)";
+  if (h >= 14 && h < 22) return "T2 (14:00–22:00)";
+  return "T3 (22:00–06:00)";
+}
+function getFecha(isoDate) {
+  if (!isoDate) return "—";
+  return new Date(isoDate).toLocaleDateString("es-CO", {day:"2-digit",month:"2-digit",year:"numeric"});
+}
 
 // ═══════════════════════════════════════════════
 // STATE
@@ -232,12 +260,13 @@ function setView(v, oid) {
   ["dashboard","maquinas","ordenes","nueva","detalle"].forEach(x=>{
     document.getElementById("view-"+x).style.display = x===v?"block":"none";
   });
-  ["dashboard","maquinas","ordenes","nueva"].forEach(x=>{
+  ["dashboard","maquinas","ordenes","nueva","reporte"].forEach(x=>{
     const b=document.getElementById("nav-"+x);
     if(b) b.classList.toggle("active", x===v);
   });
   // Always render on explicit navigation; ticker skips "nueva" to protect form inputs
   if(v==="nueva") renderNueva();
+  else if(v==="reporte") renderReporte();
   else renderCurrent();
 }
 function renderCurrent() {
@@ -246,6 +275,7 @@ function renderCurrent() {
   else if(curView==="ordenes")   renderOrdenes();
   else if(curView==="nueva")     { /* no re-render on tick */ }
   else if(curView==="detalle")   renderDetalle();
+  else if(curView==="reporte")   renderReporte();
 }
 
 // ═══════════════════════════════════════════════
@@ -324,6 +354,8 @@ function renderDashboard() {
             <div style="font-size:16px;font-weight:700;color:#F1F5F9;margin-top:2px">${order.producto}</div>
             ${order.maquina?`<div style="font-size:11px;color:#8B5CF6;margin-top:3px">🖥️ ${order.maquina}</div>`:""}
             ${order.cliente?`<div style="font-size:11px;color:#64748B;margin-top:1px">👤 ${order.cliente}</div>`:""}
+            ${order.operario?`<div style="font-size:11px;color:#10B981;margin-top:1px">👷 ${order.operario}</div>`:""}
+            ${order.turno?`<div style="font-size:10px;color:#475569;margin-top:1px">🕐 ${order.turno}</div>`:""}
           </div>${badge(order.status)}</div>
         <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
           <svg width="68" height="68" viewBox="0 0 72 72" style="flex-shrink:0">
@@ -489,6 +521,10 @@ function renderNueva() {
           <div><label class="lbl">Vel. Objetivo (uds/hr)</label><input id="f-velObj" class="inp" type="number" placeholder="0"/></div>
           <div><label class="lbl">Vel. Actual (uds/hr)</label><input id="f-velAct" class="inp" type="number" placeholder="0"/></div>
           <div><label class="lbl">Máquina</label><select id="f-maquina" class="inp">${machineOpts}</select></div>
+          <div style="grid-column:span 2"><label class="lbl">Operario</label><select id="f-operario" class="inp">
+            <option value="">— Seleccionar operario —</option>
+            ${OPERARIOS.map(op=>`<option value="${op}">${op}</option>`).join("")}
+          </select></div>
           <div><label class="lbl">Estado inicial</label><select id="f-status" class="inp">${statusOpts}</select></div>
           <div style="grid-column:span 2"><label class="lbl">Notas</label>
             <textarea id="f-notas" class="inp" rows="3" placeholder="Observaciones iniciales…"></textarea></div>
@@ -516,6 +552,7 @@ function autofillOrder(val) {
       if(sel.options[i].value===found.maquina){sel.selectedIndex=i;break;}
     }
   }
+  // Turno se asigna automáticamente al crear la orden (en el servidor)
 }
 
 async function submitOrder() {
@@ -526,7 +563,8 @@ async function submitOrder() {
     ordenId, producto,
     cliente:  document.getElementById("f-cliente").value.trim(),
     maquina:  document.getElementById("f-maquina").value,
-    cantidad: Number(document.getElementById("f-cantidad").value)||0,
+    operario: document.getElementById("f-operario")?document.getElementById("f-operario").value:"",
+    cantidad: Number(String(document.getElementById("f-cantidad").value).replace(/\./g,"").replace(/,/g,""))||0,
     velocidadObjetivo: Number(document.getElementById("f-velObj").value)||0,
     velocidadActual:   Number(document.getElementById("f-velAct").value)||0,
     notas:    document.getElementById("f-notas").value.trim(),
@@ -609,6 +647,8 @@ function renderDetalle() {
         <span style="font-family:'JetBrains Mono',monospace;color:#64748B;font-size:13px">${order.ordenId}</span>
         ${order.maquina?`<span style="font-size:12px;color:#8B5CF6;background:#1E1B4B;padding:3px 10px;border-radius:20px;border:1px solid #4C1D95">🖥️ ${order.maquina}</span>`:""}
         ${order.cliente?`<span style="font-size:12px;color:#64748B">👤 ${order.cliente}</span>`:""}
+        ${order.operario?`<span style="font-size:12px;color:#10B981;background:#052E16;padding:3px 10px;border-radius:20px;border:1px solid #065F46">👷 ${order.operario}</span>`:""}
+        ${order.turno?`<span style="font-size:12px;color:#475569">🕐 ${order.turno}</span>`:""}
         ${badge(order.status)}
       </div>
 
@@ -746,6 +786,110 @@ async function loadCatalog() {
     const d=await r.json();
     catalog=d.catalog||[];
   }catch(e){}
+}
+
+// ═══════════════════════════════════════════════
+// REPORTE
+// ═══════════════════════════════════════════════
+function renderReporte() {
+  const finalizadas = orders.filter(o=>o.status==="finalizada");
+  const todas = orders; // todas incluyendo activas
+
+  // Summary cards
+  const totalOrds = todas.length;
+  const totalFin  = finalizadas.length;
+  const totalActivas = todas.filter(o=>o.status!=="finalizada").length;
+
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+    <h2 style="font-size:20px;font-weight:700">📈 Reporte de Órdenes</h2>
+    <button class="btn" onclick="exportReporte()" style="padding:8px 18px;background:#10B981;color:#fff;font-size:13px">⬇️ Exportar CSV</button>
+  </div>`;
+
+  // KPI row
+  html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">
+    ${[
+      {l:"Total Órdenes",v:totalOrds,c:"#3B82F6"},
+      {l:"Finalizadas",v:totalFin,c:"#10B981"},
+      {l:"En Proceso",v:totalActivas,c:"#F59E0B"},
+      {l:"Operarios Activos",v:[...new Set(todas.filter(o=>o.operario).map(o=>o.operario))].length,c:"#8B5CF6"},
+    ].map(k=>`<div class="card" style="padding:16px">
+      <div style="font-size:11px;color:#64748B;margin-bottom:4px">${k.l}</div>
+      <div style="font-size:28px;font-weight:700;color:${k.c};font-family:'JetBrains Mono',monospace">${k.v}</div>
+    </div>`).join("")}
+  </div>`;
+
+  if(todas.length===0){
+    html+=`<div class="card" style="padding:40px;text-align:center;color:#475569">Sin órdenes registradas aún</div>`;
+  } else {
+    html+=`<div class="card" style="overflow:auto"><table class="tbl">
+      <thead><tr>
+        <th>Orden</th><th>Producto</th><th>Cliente</th><th>Máquina</th><th>Operario</th>
+        <th>Turno</th><th>Fecha</th><th>Estado</th>
+        <th>T.Montaje</th><th>T.Ajuste</th><th>T.Producción</th><th>T.Total</th>
+        <th>Vel.Obj</th><th>Vel.Real</th><th>Efic.</th>
+        <th>Ajustes</th>
+      </tr></thead><tbody>`;
+
+    todas.forEach((o,i)=>{
+      const t=computeTimes(o);
+      const tTotal=(t.tSetup||0)+(t.tAjuste||0)+(t.tProduccion||0)+(t.tFinalizada||0);
+      const vp=Number(o.velocidadObjetivo)>0?((Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100).toFixed(0):"—";
+      const cfg=STATUS_CONFIG[o.status]||STATUS_CONFIG.setup;
+      const firstAt=o.history&&o.history.length>0?o.history[0].at:o.createdAt;
+      const turno=getTurno(firstAt);
+      const fecha=getFecha(firstAt);
+      const ajustesLista=(o.ajustes||[]).map(a=>a.descripcion).join(" | ")||"—";
+
+      html+=`<tr style="background:${i%2?"#0F172A10":"transparent"}">
+        <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;white-space:nowrap">${o.ordenId}</td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#E2E8F0;font-weight:600" title="${o.producto}">${o.producto}</td>
+        <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#94A3B8" title="${o.cliente||''}">${o.cliente||"—"}</td>
+        <td style="color:#8B5CF6;font-size:11px;white-space:nowrap">${o.maquina||"—"}</td>
+        <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#10B981;font-size:11px" title="${o.operario||''}">${o.operario||"—"}</td>
+        <td style="font-size:11px;color:#64748B;white-space:nowrap">${turno}</td>
+        <td style="font-size:11px;color:#64748B;white-space:nowrap">${fecha}</td>
+        <td><span class="badge" style="background:${cfg.bg};color:${cfg.color};white-space:nowrap">${cfg.icon} ${cfg.label}</span></td>
+        <td style="font-family:'JetBrains Mono',monospace;color:#F59E0B;font-size:11px;white-space:nowrap">${fmtTime(t.tSetup)}</td>
+        <td style="font-family:'JetBrains Mono',monospace;color:#8B5CF6;font-size:11px;white-space:nowrap">${fmtTime(t.tAjuste)}</td>
+        <td style="font-family:'JetBrains Mono',monospace;color:#3B82F6;font-size:11px;white-space:nowrap">${fmtTime(t.tProduccion)}</td>
+        <td style="font-family:'JetBrains Mono',monospace;color:#E2E8F0;font-size:11px;font-weight:600;white-space:nowrap">${fmtTime(tTotal)}</td>
+        <td style="font-family:'JetBrains Mono',monospace;color:#64748B;font-size:11px">${o.velocidadObjetivo||0}</td>
+        <td style="font-family:'JetBrains Mono',monospace;color:#64748B;font-size:11px">${o.velocidadActual||0}</td>
+        <td style="font-weight:700;font-size:12px;white-space:nowrap;color:${vp!=="—"?velColor(Number(vp)):"#475569"}">${vp!=="—"?vp+"%":"—"}</td>
+        <td style="font-size:11px;color:#64748B;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ajustesLista}">${(o.ajustes||[]).length} (${ajustesLista.substring(0,40)}${ajustesLista.length>40?"…":""})</td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  }
+  document.getElementById("view-reporte").innerHTML=html;
+}
+
+function exportReporte() {
+  const rows=[["Orden","Producto","Cliente","Máquina","Operario","Turno","Fecha","Estado",
+               "T.Montaje(seg)","T.Ajuste(seg)","T.Producción(seg)","T.Total(seg)",
+               "Vel.Objetivo","Vel.Real","Eficiencia%","Cant.Ajustes","Detalle Ajustes",
+               "Historial Estados"]];
+  orders.forEach(o=>{
+    const t=computeTimes(o);
+    const tTotal=(t.tSetup||0)+(t.tAjuste||0)+(t.tProduccion||0)+(t.tFinalizada||0);
+    const vp=Number(o.velocidadObjetivo)>0?((Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100).toFixed(1):"";
+    const firstAt=o.history&&o.history.length>0?o.history[0].at:o.createdAt;
+    const histStr=(o.history||[]).map(h=>`${STATUS_CONFIG[h.status]?.label||h.status}@${fmtDT(h.at)}`).join(" → ");
+    const ajustesStr=(o.ajustes||[]).map(a=>`${a.descripcion}(${a.duracion||0}min)`).join(" | ");
+    rows.push([
+      o.ordenId, o.producto, o.cliente||"", o.maquina||"", o.operario||"",
+      getTurno(firstAt), getFecha(firstAt), STATUS_CONFIG[o.status]?.label||o.status,
+      t.tSetup||0, t.tAjuste||0, t.tProduccion||0, tTotal,
+      o.velocidadObjetivo||0, o.velocidadActual||0, vp,
+      (o.ajustes||[]).length, ajustesStr, histStr,
+    ]);
+  });
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=`reporte-produccion-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
 }
 
 // ═══════════════════════════════════════════════
