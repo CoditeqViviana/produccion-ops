@@ -69,12 +69,21 @@ def get_orders():
 def create_order():
     data = request.json
     now  = datetime.utcnow().isoformat() + "Z"
+    # Compute turno from creation time
+    from datetime import datetime as dt2
+    hour = dt2.fromisoformat(now.replace("Z","")).hour
+    if 6 <= hour < 14:   turno = "T1 (06:00-14:00)"
+    elif 14 <= hour < 22: turno = "T2 (14:00-22:00)"
+    else:                 turno = "T3 (22:00-06:00)"
+
     order = {
         "id":                str(uuid.uuid4()),
         "ordenId":           data.get("ordenId", ""),
         "producto":          data.get("producto", ""),
         "cliente":           data.get("cliente", ""),
         "maquina":           data.get("maquina", ""),
+        "operario":          data.get("operario", ""),
+        "turno":             turno,
         "cantidad":          data.get("cantidad", 0),
         "velocidadObjetivo": data.get("velocidadObjetivo", 0),
         "velocidadActual":   data.get("velocidadActual", 0),
