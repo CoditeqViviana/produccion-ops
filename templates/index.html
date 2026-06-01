@@ -707,7 +707,7 @@ document.getElementById("excel-input").addEventListener("change",async function(
       const mapped=rows.map(row=>{
         const norm={}; Object.entries(row).forEach(([k,v])=>{norm[normalize(k)]=v;});
         // # Orden — columna especifica del Excel de planta
-        const ordenId=String(norm["ordendeproduccionordendeproducciónnumber"]||norm["ordendeproduccionordendeproductionnumber"]||norm["orden"]||norm["norden"]||norm["id"]||"").trim();
+        const ordenId=String(norm["ordendeproduccionordendeproduccionnumber"]||norm["ordendeproduccionordendeproductionnumber"]||norm["orden"]||norm["norden"]||norm["id"]||"").trim();
         // Producto = Referencia
         const producto=String(norm["produccionreferencia"]||norm["referencia"]||norm["producto"]||norm["descripcion"]||"").trim();
         // Cliente = Organizacion
