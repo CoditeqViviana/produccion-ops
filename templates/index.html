@@ -237,13 +237,15 @@ function setView(v, oid) {
     const b=document.getElementById("nav-"+x);
     if(b) b.classList.toggle("active", x===v);
   });
-  renderCurrent();
+  // Always render on explicit navigation; ticker skips "nueva" to protect form inputs
+  if(v==="nueva") renderNueva();
+  else renderCurrent();
 }
 function renderCurrent() {
   if(curView==="dashboard") renderDashboard();
   else if(curView==="maquinas")  renderMaquinas();
   else if(curView==="ordenes")   renderOrdenes();
-  else if(curView==="nueva")     renderNueva();
+  else if(curView==="nueva")     { /* no re-render on tick */ }
   else if(curView==="detalle")   renderDetalle();
 }
 
