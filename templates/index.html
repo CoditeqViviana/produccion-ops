@@ -138,13 +138,12 @@ input.inp:focus,select.inp:focus{border-color:#3B82F6}
 // ═══════════════════════════════════════════════
 const MACHINES = ["Nilpeter 1","Nilpeter 2","Kromia"];
 const STATUS_CONFIG = {
-  setup:      {label:"Setup",      color:"#F59E0B",dark:"#92400E",bg:"#FEF3C7",icon:"⚙️"},
-  produccion: {label:"Producción", color:"#3B82F6",dark:"#1D4ED8",bg:"#EFF6FF",icon:"🏭"},
+  setup:      {label:"Montaje",    color:"#F59E0B",dark:"#92400E",bg:"#FEF3C7",icon:"🔩"},
   ajuste:     {label:"Ajuste",     color:"#8B5CF6",dark:"#4C1D95",bg:"#F5F3FF",icon:"🔧"},
-  pausada:    {label:"Pausada",    color:"#EF4444",dark:"#7F1D1D",bg:"#FEF2F2",icon:"⏸️"},
+  produccion: {label:"Producción", color:"#3B82F6",dark:"#1D4ED8",bg:"#EFF6FF",icon:"🏭"},
   finalizada: {label:"Finalizada", color:"#10B981",dark:"#064E3B",bg:"#ECFDF5",icon:"✅"},
 };
-const STATUS_KEYS = ["setup","produccion","ajuste","pausada","finalizada"];
+const STATUS_KEYS = ["setup","ajuste","produccion","finalizada"];
 
 // ═══════════════════════════════════════════════
 // STATE
@@ -193,8 +192,8 @@ function fmtDT(iso) {
 function velColor(p) { return p>=90?"#10B981":p>=70?"#F59E0B":"#EF4444"; }
 
 function computeTimes(order) {
-  const t={tSetup:0,tProduccion:0,tAjuste:0,tPausada:0,tFinalizada:0};
-  const keyMap={setup:"tSetup",produccion:"tProduccion",ajuste:"tAjuste",pausada:"tPausada",finalizada:"tFinalizada"};
+  const t={tSetup:0,tProduccion:0,tAjuste:0,tFinalizada:0};
+  const keyMap={setup:"tSetup",produccion:"tProduccion",ajuste:"tAjuste",finalizada:"tFinalizada"};
   const hist=order.history||[];
   const now=Date.now();
   for(let i=0;i<hist.length;i++){
@@ -209,11 +208,11 @@ function computeTimes(order) {
 function getAcciones(o) {
   const acc=[];
   const vp=Number(o.velocidadObjetivo)>0?(Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100:0;
-  if(o.status==="pausada") acc.push({tipo:"critica",msg:"⚠️ Orden PAUSADA — verificar causa de paro"});
+  // pausada estado removed
   if(vp>0&&vp<70)  acc.push({tipo:"critica",msg:`🔴 Velocidad baja (${vp.toFixed(0)}%) — revisar proceso`});
   else if(vp>0&&vp<90) acc.push({tipo:"advertencia",msg:`🟡 Velocidad al ${vp.toFixed(0)}% — optimizar`});
   const tSetup=(computeTimes(o).tSetup||0);
-  if(tSetup>1800) acc.push({tipo:"advertencia",msg:`⏱️ Setup prolongado (${Math.floor(tSetup/60)} min) — analizar causa`});
+  if(tSetup>1800) acc.push({tipo:"advertencia",msg:`⏱️ Montaje prolongado (${Math.floor(tSetup/60)} min) — analizar causa`});
   if((o.ajustes?.length||0)>=3) acc.push({tipo:"critica",msg:`🔧 ${o.ajustes.length} ajustes — revisar estabilidad`});
   if(acc.length===0&&o.status!=="finalizada") acc.push({tipo:"ok",msg:"✅ Ejecución dentro de parámetros"});
   return acc;
@@ -432,7 +431,7 @@ function renderOrdenes() {
     html+=`<div class="card" style="padding:40px;text-align:center;color:#475569">Sin órdenes registradas</div>`;
   } else {
     html+=`<div class="card" style="overflow:auto"><table class="tbl">
-      <thead><tr>${["Orden","Producto","Máquina","Estado","Setup","Producción","Ajuste","Pausada","Finalizada","Efic.",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+      <thead><tr>${["Orden","Producto","Máquina","Estado","Montaje","Ajuste","Producción","Finalizada","Efic.",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
       <tbody>`;
     orders.forEach((o,i)=>{
       const t=computeTimes(o);
@@ -443,9 +442,8 @@ function renderOrdenes() {
         <td style="color:#8B5CF6;font-size:11px">${o.maquina||"—"}</td>
         <td>${badge(o.status)}</td>
         <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;font-size:11px">${fmtTime(t.tSetup)}</td>
-        <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;font-size:11px">${fmtTime(t.tProduccion)}</td>
         <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;font-size:11px">${fmtTime(t.tAjuste)}</td>
-        <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;font-size:11px">${fmtTime(t.tPausada)}</td>
+        <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;font-size:11px">${fmtTime(t.tProduccion)}</td>
         <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;font-size:11px">${fmtTime(t.tFinalizada)}</td>
         <td>${vp!=="—"?`<span style="color:${velColor(Number(vp))};font-weight:700">${vp}%</span>`:"—"}</td>
         <td><button class="btn" onclick="setView('detalle','${o.id}')" style="padding:4px 10px;font-size:11px;background:#1E293B;color:#94A3B8;border:1px solid #334155">Ver →</button></td>
@@ -468,7 +466,7 @@ function renderNueva() {
         💡 Sube un Excel con tu catálogo de órdenes para autocompletado automático
       </div>`;
 
-  const statusOpts=["setup","produccion","ajuste","pausada"].map(k=>{
+  const statusOpts=["setup","ajuste","produccion","finalizada"].map(k=>{
     const c=STATUS_CONFIG[k];
     return `<option value="${k}">${c.icon} ${c.label}</option>`;
   }).join("");
@@ -487,7 +485,7 @@ function renderNueva() {
           </div>
           <div><label class="lbl">Producto *</label><input id="f-producto" class="inp" placeholder="Nombre del producto"/></div>
           <div><label class="lbl">Cliente</label><input id="f-cliente" class="inp" placeholder="Nombre del cliente"/></div>
-          <div><label class="lbl">Cantidad objetivo</label><input id="f-cantidad" class="inp" type="number" placeholder="0"/></div>
+          <div><label class="lbl">Cantidad objetivo</label><input id="f-cantidad" class="inp" type="text" placeholder="0" readonly style="color:#94A3B8;cursor:not-allowed;opacity:.8"/></div>
           <div><label class="lbl">Vel. Objetivo (uds/hr)</label><input id="f-velObj" class="inp" type="number" placeholder="0"/></div>
           <div><label class="lbl">Vel. Actual (uds/hr)</label><input id="f-velAct" class="inp" type="number" placeholder="0"/></div>
           <div><label class="lbl">Máquina</label><select id="f-maquina" class="inp">${machineOpts}</select></div>
@@ -510,7 +508,7 @@ function autofillOrder(val) {
   if(!found) return;
   if(found.producto)          document.getElementById("f-producto").value=found.producto;
   if(found.cliente)           document.getElementById("f-cliente").value=found.cliente;
-  if(found.cantidad)          document.getElementById("f-cantidad").value=found.cantidad;
+  if(found.cantidad)          document.getElementById("f-cantidad").value=Number(found.cantidad).toLocaleString("es-CO");
   if(found.velocidadObjetivo) document.getElementById("f-velObj").value=found.velocidadObjetivo;
   if(found.maquina){
     const sel=document.getElementById("f-maquina");
