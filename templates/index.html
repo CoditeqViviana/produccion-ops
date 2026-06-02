@@ -240,6 +240,8 @@ function setConnLabel(ok) {
 function onData(data) {
   orders = data.orders || [];
   renderCurrent();
+  // If reporte is open, refresh it too (filters need fresh data)
+  if(curView==="reporte") renderReporte();
 }
 
 // ═══════════════════════════════════════════════
@@ -307,7 +309,10 @@ function setView(v, oid) {
   });
   // Always render on explicit navigation; ticker skips "nueva" to protect form inputs
   if(v==="nueva") renderNueva();
-  else if(v==="reporte") renderReporte();
+  else if(v==="reporte") { 
+    // Small delay to ensure orders are loaded from SSE
+    setTimeout(renderReporte, 100); 
+  }
   else renderCurrent();
 }
 function renderCurrent() {
@@ -316,12 +321,11 @@ function renderCurrent() {
   else if(curView==="ordenes")   renderOrdenes();
   else if(curView==="nueva")     { /* no re-render on tick */ }
   else if(curView==="detalle") {
-    // Don't wipe vel-inp if user is actively editing it
     const velEl=document.getElementById("vel-inp");
     if(velEl && document.activeElement===velEl) return;
     renderDetalle();
   }
-  else if(curView==="reporte")   renderReporte();
+  else if(curView==="reporte") renderReporte();
 }
 
 // ═══════════════════════════════════════════════
@@ -347,7 +351,7 @@ function renderDashboard() {
   const kpis=[
     {label:"Órdenes Activas",  val:active,           icon:"📋",color:"#3B82F6",    sub:`${finaliz} finalizadas`},
     {label:"En Producción",    val:enProd,            icon:"🏭",color:"#10B981",    sub:"corriendo ahora"},
-    {label:"Eficiencia Prom.", val:`${avgVel.toFixed(0)}%`,icon:"⚡",color:velColor(avgVel),sub:"vs velocidad objetivo"},
+    {label:"Eficiencia Prom.", val:`${avgVel.toFixed(0)}%`,icon:"⚡",color:velColor(Math.min(avgVel,100)),sub:"(Vel.Real÷Vel.Obj)×100"},
     {label:"Alertas Críticas", val:criticas,          icon:"🚨",color:criticas>0?"#EF4444":"#10B981",sub:criticas>0?"requieren atención":"sin alertas"},
   ];
 
@@ -876,6 +880,8 @@ async function loadCatalog() {
 // REPORTE
 // ═══════════════════════════════════════════════
 function renderReporte() {
+  const el = document.getElementById("view-reporte");
+  if(!el) { setTimeout(renderReporte, 150); return; }
   const todas = [...orders];
   if(todas.length===0){
     document.getElementById("view-reporte").innerHTML=`<div class="card" style="padding:60px;text-align:center">
@@ -1025,7 +1031,8 @@ function renderReporte() {
     });
     html+=`</tbody></table></div>`;
   }
-  document.getElementById("view-reporte").innerHTML=html;
+  const reporteEl = document.getElementById("view-reporte");
+  if(reporteEl) reporteEl.innerHTML=html;
 }
 
 function buildReporteRows(){
