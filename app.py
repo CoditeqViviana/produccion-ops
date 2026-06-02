@@ -240,7 +240,31 @@ def get_catalog():
     except Exception as e:
         return jsonify({"catalog": [], "error": str(e)})
 
-if __name__ == "__main__":
+# Auto-init DB on startup
+try:
     if DATABASE_URL:
         init_db()
+        print("✅ DB initialized")
+    else:
+        print("⚠️  No DATABASE_URL set — running without persistence")
+except Exception as e:
+    print("❌ DB init error:", e)
+
+@app.route("/api/reset", methods=["POST"])
+def reset_orders():
+    """Delete all orders — use with care."""
+    secret = request.json.get("secret","")
+    if secret != "coditeq2024":
+        return jsonify({"error": "unauthorized"}), 403
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM orders")
+            conn.commit()
+        broadcast()
+        return jsonify({"ok": True, "msg": "All orders deleted"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
     app.run(debug=True, threaded=True, host="0.0.0.0", port=5000)
