@@ -184,6 +184,29 @@ function getFechaCol(isoDate) {
   const d = new Date(new Date(isoDate).getTime() - 5*60*60*1000);
   return d.toISOString().slice(0,10).split("-").reverse().join("/");
 }
+function calcETA(order) {
+  // ETA = hora_inicio_produccion + (metros / velocidad_mts_hr)
+  // velocidad en uds/hr, metros del pedido
+  const vel = Number(order.velocidadActual) || Number(order.velocidadObjetivo) || 0;
+  const metros = Number(order.metros) || 0;
+  if (vel <= 0 || metros <= 0 || order.status === "finalizada") return null;
+  // Find when produccion started
+  const histProd = (order.history||[]).filter(h=>h.status==="produccion");
+  const startProd = histProd.length > 0 ? new Date(histProd[0].at) : new Date();
+  // Time already in produccion (seconds)
+  const t = computeTimes(order);
+  const secsInProd = t.tProduccion || 0;
+  // Total seconds needed = metros / vel * 3600
+  const totalSecs = (metros / vel) * 3600;
+  const remaining = Math.max(0, totalSecs - secsInProd);
+  const eta = new Date(Date.now() + remaining * 1000);
+  // Convert to Colombia time
+  const etaCol = new Date(eta.getTime() - 5*60*60*1000);
+  const h = etaCol.getUTCHours().toString().padStart(2,"0");
+  const m = etaCol.getUTCMinutes().toString().padStart(2,"0");
+  const pct = totalSecs > 0 ? Math.min(100,(secsInProd/totalSecs)*100).toFixed(0) : 0;
+  return { hora: `${h}:${m}`, remaining: Math.floor(remaining/60), pct: Number(pct), totalMin: Math.round(totalSecs/60) };
+}
 function getFecha(isoDate) {
   if (!isoDate) return "—";
   return new Date(isoDate).toLocaleDateString("es-CO", {day:"2-digit",month:"2-digit",year:"numeric"});
@@ -239,10 +262,12 @@ function computeTimes(order) {
   const t={tSetup:0,tProduccion:0,tAjuste:0,tFinalizada:0};
   const keyMap={setup:"tSetup",produccion:"tProduccion",ajuste:"tAjuste",finalizada:"tFinalizada"};
   const hist=order.history||[];
-  const now=Date.now();
+  // Stop at finalizadaAt if order is done — no live ticking
+  const isFinal = order.status==="finalizada";
+  const ceiling = isFinal && order.finalizadaAt ? new Date(order.finalizadaAt).getTime() : Date.now();
   for(let i=0;i<hist.length;i++){
     const start=new Date(hist[i].at).getTime();
-    const end=hist[i+1]?new Date(hist[i+1].at).getTime():now;
+    const end=hist[i+1]?new Date(hist[i+1].at).getTime():ceiling;
     const k=keyMap[hist[i].status];
     if(k) t[k]+=Math.floor((end-start)/1000);
   }
@@ -389,6 +414,24 @@ function renderDashboard() {
           </svg>
           <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px">${timeRows}</div>
         </div>
+        ${(()=>{
+          const eta=calcETA(order);
+          if(!eta) return "";
+          return `<div style="background:#0F172A;border-radius:8px;padding:8px 12px;margin-bottom:10px;border:1px solid #1E293B;display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:10px;color:#64748B">⏰ Hora estimada fin</div>
+              <div style="font-size:16px;font-weight:700;color:#10B981;font-family:'JetBrains Mono',monospace">${eta.hora}</div>
+              <div style="font-size:10px;color:#64748B">${eta.remaining} min restantes · ${eta.pct}% avance</div>
+            </div>
+            <div style="width:44px;height:44px">
+              <svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="none" stroke="#1E293B" stroke-width="4"/>
+              <circle cx="22" cy="22" r="18" fill="none" stroke="#10B981" stroke-width="4"
+                stroke-dasharray="${(2*Math.PI*18).toFixed(1)}" stroke-dashoffset="${((2*Math.PI*18)*(1-eta.pct/100)).toFixed(1)}"
+                stroke-linecap="round" transform="rotate(-90 22 22)"/>
+              <text x="22" y="26" text-anchor="middle" fill="#10B981" font-size="9" font-weight="700">${eta.pct}%</text></svg>
+            </div>
+          </div>`;
+        })()}
         <div style="margin-bottom:12px">${accHtml}</div>
         <div style="display:flex;gap:5px;flex-wrap:wrap">
           ${btns}
@@ -693,6 +736,12 @@ function renderDetalle() {
           <!-- Velocidad -->
           <div class="card" style="padding:20px;margin-bottom:16px">
             <h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">⚡ Velocidad</h3>
+    ${(()=>{ const eta=calcETA(order); if(!eta||order.status!=="produccion") return "";
+      return `<div style="background:#052E16;border:1px solid #065F46;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+        <div><div style="font-size:11px;color:#6EE7B7;margin-bottom:2px">⏰ Hora estimada de finalización</div>
+        <div style="font-size:22px;font-weight:700;color:#10B981;font-family:'JetBrains Mono',monospace">${eta.hora}</div>
+        <div style="font-size:11px;color:#6EE7B7">${eta.remaining} min restantes · ${eta.pct}% completado · Total estimado: ${eta.totalMin} min</div>
+        <div style="font-size:10px;color:#475569;margin-top:2px">Fórmula: (Metros lineales ÷ Velocidad actual) × 60</div></div></div>`;})()}
             <div style="display:flex;align-items:center;gap:16px">
               <div style="flex:1">
                 <div style="display:flex;justify-content:space-between;margin-bottom:8px">
@@ -827,84 +876,151 @@ async function loadCatalog() {
 // REPORTE
 // ═══════════════════════════════════════════════
 function renderReporte() {
-  const finalizadas = orders.filter(o=>o.status==="finalizada");
-  const todas = [...orders]; // todas incluyendo activas
-
-  // Summary cards
-  const totalOrds = todas.length;
-  const totalFin  = finalizadas.length;
-  const totalActivas = todas.filter(o=>o.status!=="finalizada").length;
-  
-  if(totalOrds===0){
+  const todas = [...orders];
+  if(todas.length===0){
     document.getElementById("view-reporte").innerHTML=`<div class="card" style="padding:60px;text-align:center">
       <div style="font-size:48px;margin-bottom:16px">📈</div>
       <div style="font-size:18px;font-weight:600;color:#94A3B8;margin-bottom:8px">Sin órdenes registradas</div>
-      <div style="color:#475569">Crea órdenes de producción para ver el reporte</div>
-    </div>`;
+      <div style="color:#475569">Crea órdenes de producción para ver el reporte</div></div>`;
     return;
   }
 
-  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-    <h2 style="font-size:20px;font-weight:700">📈 Reporte de Órdenes</h2>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn" onclick="exportReporte('csv')" style="padding:8px 16px;background:#10B981;color:#fff;font-size:13px">⬇️ CSV</button>
-      <button class="btn" onclick="exportReporte('excel')" style="padding:8px 16px;background:#1D4ED8;color:#fff;font-size:13px">⬇️ Excel</button>
-      <button class="btn" onclick="window.print()" style="padding:8px 16px;background:#4C1D95;color:#fff;font-size:13px">🖨️ Imprimir/PDF</button>
-    </div>
-  </div>`;
+  // Read active filters
+  const fOp  = document.getElementById("f-fil-op")?.value  || "";
+  const fMaq = document.getElementById("f-fil-maq")?.value || "";
+  const fTur = document.getElementById("f-fil-tur")?.value || "";
+  const fEst = document.getElementById("f-fil-est")?.value || "";
 
-  // KPI row
-  html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">
+  let filtered = todas.filter(o=>{
+    if(fOp  && o.operario!==fOp)  return false;
+    if(fMaq && o.maquina!==fMaq)  return false;
+    if(fEst && o.status!==fEst)   return false;
+    if(fTur){
+      const firstAt=o.history&&o.history.length>0?o.history[0].at:o.createdAt;
+      if(getTurno(firstAt)!==fTur) return false;
+    }
+    return true;
+  });
+
+  // KPIs del filtered set
+  const totalFin  = filtered.filter(o=>o.status==="finalizada").length;
+  const totalAct  = filtered.filter(o=>o.status!=="finalizada").length;
+  const totalMetros = filtered.reduce((s,o)=>s+Number(o.metros||0),0);
+  const withVel   = filtered.filter(o=>Number(o.velocidadObjetivo)>0);
+  const avgEfic   = withVel.length>0
+    ? withVel.reduce((s,o)=>s+(Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100,0)/withVel.length : 0;
+
+  const operarios = [...new Set(todas.filter(o=>o.operario).map(o=>o.operario))];
+  const maquinas  = MACHINES;
+  const turnos    = ["T1 (06:00-14:00)","T2 (14:00-22:00)","T3 (22:00-06:00)"];
+  const estados   = Object.entries(STATUS_CONFIG).map(([k,v])=>({k,l:v.label}));
+
+  let html = `
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+    <h2 style="font-size:20px;font-weight:700">📈 Reporte de Producción</h2>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" onclick="exportReporte('csv')"   style="padding:8px 14px;background:#10B981;color:#fff;font-size:12px">⬇️ CSV</button>
+      <button class="btn" onclick="exportReporte('excel')" style="padding:8px 14px;background:#1D4ED8;color:#fff;font-size:12px">⬇️ Excel</button>
+      <button class="btn" onclick="window.print()"         style="padding:8px 14px;background:#4C1D95;color:#fff;font-size:12px">🖨️ PDF</button>
+    </div>
+  </div>
+
+  <!-- FILTROS -->
+  <div class="card" style="padding:16px;margin-bottom:20px">
+    <div style="font-size:12px;color:#64748B;margin-bottom:10px;font-weight:600">🔍 FILTROS</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
+      <div>
+        <label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">Operario</label>
+        <select id="f-fil-op" class="inp" style="font-size:12px;padding:7px 10px" onchange="renderReporte()">
+          <option value="">Todos</option>
+          ${operarios.map(op=>`<option value="${op}" ${fOp===op?"selected":""}>${op.split(" ").slice(0,2).join(" ")}</option>`).join("")}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">Máquina</label>
+        <select id="f-fil-maq" class="inp" style="font-size:12px;padding:7px 10px" onchange="renderReporte()">
+          <option value="">Todas</option>
+          ${maquinas.map(m=>`<option value="${m}" ${fMaq===m?"selected":""}>${m}</option>`).join("")}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">Turno</label>
+        <select id="f-fil-tur" class="inp" style="font-size:12px;padding:7px 10px" onchange="renderReporte()">
+          <option value="">Todos</option>
+          ${turnos.map(t=>`<option value="${t}" ${fTur===t?"selected":""}>${t}</option>`).join("")}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">Estado</label>
+        <select id="f-fil-est" class="inp" style="font-size:12px;padding:7px 10px" onchange="renderReporte()">
+          <option value="">Todos</option>
+          ${estados.map(e=>`<option value="${e.k}" ${fEst===e.k?"selected":""}>${e.l}</option>`).join("")}
+        </select>
+      </div>
+    </div>
+    <div style="font-size:11px;color:#475569;margin-top:10px">
+      Mostrando <strong style="color:#E2E8F0">${filtered.length}</strong> de ${todas.length} órdenes
+      ${filtered.length<todas.length?`<button onclick="document.querySelectorAll('#f-fil-op,#f-fil-maq,#f-fil-tur,#f-fil-est').forEach(s=>s.value='');renderReporte()" style="margin-left:8px;padding:2px 8px;font-size:11px;background:#334155;color:#94A3B8;border:none;border-radius:4px;cursor:pointer">✕ Limpiar</button>`:""}
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
     ${[
-      {l:"Total Órdenes",v:totalOrds,c:"#3B82F6"},
-      {l:"Finalizadas",v:totalFin,c:"#10B981"},
-      {l:"En Proceso",v:totalActivas,c:"#F59E0B"},
-      {l:"Operarios Activos",v:[...new Set(todas.filter(o=>o.operario).map(o=>o.operario))].length,c:"#8B5CF6"},
+      {l:"Finalizadas",  v:totalFin,                    c:"#10B981",  sub:"órdenes completadas"},
+      {l:"En Proceso",   v:totalAct,                    c:"#F59E0B",  sub:"órdenes activas"},
+      {l:"Metros Tot.",  v:totalMetros.toLocaleString("es-CO"), c:"#3B82F6", sub:"metros lineales"},
+      {l:"Eficiencia",   v:avgEfic>0?avgEfic.toFixed(0)+"%":"—", c:avgEfic>0?velColor(avgEfic):"#475569", sub:"vel.real ÷ vel.objetivo × 100"},
     ].map(k=>`<div class="card" style="padding:16px">
       <div style="font-size:11px;color:#64748B;margin-bottom:4px">${k.l}</div>
-      <div style="font-size:28px;font-weight:700;color:${k.c};font-family:'JetBrains Mono',monospace">${k.v}</div>
+      <div style="font-size:26px;font-weight:700;color:${k.c};font-family:'JetBrains Mono',monospace">${k.v}</div>
+      <div style="font-size:10px;color:#475569;margin-top:4px">${k.sub}</div>
     </div>`).join("")}
+  </div>
+
+  <!-- FÓRMULA EFICIENCIA -->
+  <div style="background:#1E1B4B;border:1px solid #4C1D95;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:12px">
+    <span style="color:#A78BFA;font-weight:600">📐 Fórmula de Eficiencia: </span>
+    <span style="color:#C4B5FD;font-family:'JetBrains Mono',monospace"> Eficiencia (%) = (Velocidad Real ÷ Velocidad Objetivo) × 100</span>
+    <span style="color:#6D28D9;margin-left:8px">· Verde ≥90% · Amarillo ≥70% · Rojo &lt;70%</span>
   </div>`;
 
-  if(todas.length===0){
-    html+=`<div class="card" style="padding:40px;text-align:center;color:#475569">Sin órdenes registradas aún</div>`;
+  // TABLE
+  if(filtered.length===0){
+    html+=`<div class="card" style="padding:40px;text-align:center;color:#475569">Sin órdenes con los filtros seleccionados</div>`;
   } else {
     html+=`<div class="card" style="overflow:auto"><table class="tbl">
       <thead><tr>
         <th>Orden</th><th>Producto</th><th>Cliente</th><th>Máquina</th><th>Operario</th>
         <th>Turno</th><th>Fecha</th><th>Estado</th>
         <th>T.Montaje</th><th>T.Ajuste</th><th>T.Producción</th><th>T.Total</th>
-        <th>Vel.Obj</th><th>Vel.Real</th><th>Efic.</th>
-        <th>Novedades</th>
+        <th>Metros</th><th>Vel.Obj</th><th>Vel.Real</th><th>Efic.</th><th>Novedades</th>
       </tr></thead><tbody>`;
 
-    todas.forEach((o,i)=>{
+    filtered.forEach((o,i)=>{
       const t=computeTimes(o);
       const tTotal=(t.tSetup||0)+(t.tAjuste||0)+(t.tProduccion||0)+(t.tFinalizada||0);
       const vp=Number(o.velocidadObjetivo)>0?((Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100).toFixed(0):"—";
       const cfg=STATUS_CONFIG[o.status]||STATUS_CONFIG.setup;
       const firstAt=o.history&&o.history.length>0?o.history[0].at:o.createdAt;
-      const turno=getTurno(firstAt);
-      const fecha=getFechaCol(firstAt);
-      const ajustesLista=(o.ajustes||[]).map(a=>a.descripcion).join(" | ")||"—";
-
-      html+=`<tr style="background:${i%2?"#0F172A10":"transparent"}">
+      html+=`<tr style="background:${i%2?"#0F172A18":"transparent"}">
         <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;white-space:nowrap">${o.ordenId}</td>
-        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#E2E8F0;font-weight:600" title="${o.producto}">${o.producto}</td>
-        <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#94A3B8" title="${o.cliente||''}">${o.cliente||"—"}</td>
+        <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#E2E8F0;font-weight:600" title="${o.producto}">${o.producto}</td>
+        <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#94A3B8;font-size:11px" title="${o.cliente||''}">${o.cliente||"—"}</td>
         <td style="color:#8B5CF6;font-size:11px;white-space:nowrap">${o.maquina||"—"}</td>
-        <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#10B981;font-size:11px" title="${o.operario||''}">${o.operario||"—"}</td>
-        <td style="font-size:11px;color:#64748B;white-space:nowrap">${turno}</td>
-        <td style="font-size:11px;color:#64748B;white-space:nowrap">${fecha}</td>
-        <td><span class="badge" style="background:${cfg.bg};color:${cfg.color};white-space:nowrap">${cfg.icon} ${cfg.label}</span></td>
+        <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#10B981;font-size:11px" title="${o.operario||''}">${o.operario?o.operario.split(" ").slice(0,2).join(" "):"—"}</td>
+        <td style="font-size:11px;color:#64748B;white-space:nowrap">${o.turno||getTurno(firstAt)}</td>
+        <td style="font-size:11px;color:#64748B;white-space:nowrap">${getFechaCol(firstAt)}</td>
+        <td><span class="badge" style="background:${cfg.bg};color:${cfg.color};white-space:nowrap;font-size:10px">${cfg.icon} ${cfg.label}</span></td>
         <td style="font-family:'JetBrains Mono',monospace;color:#F59E0B;font-size:11px;white-space:nowrap">${fmtTime(t.tSetup)}</td>
         <td style="font-family:'JetBrains Mono',monospace;color:#8B5CF6;font-size:11px;white-space:nowrap">${fmtTime(t.tAjuste)}</td>
         <td style="font-family:'JetBrains Mono',monospace;color:#3B82F6;font-size:11px;white-space:nowrap">${fmtTime(t.tProduccion)}</td>
         <td style="font-family:'JetBrains Mono',monospace;color:#E2E8F0;font-size:11px;font-weight:600;white-space:nowrap">${fmtTime(tTotal)}</td>
+        <td style="font-family:'JetBrains Mono',monospace;color:#64748B;font-size:11px">${Number(o.metros||0).toLocaleString("es-CO")}</td>
         <td style="font-family:'JetBrains Mono',monospace;color:#64748B;font-size:11px">${o.velocidadObjetivo||0}</td>
         <td style="font-family:'JetBrains Mono',monospace;color:#64748B;font-size:11px">${o.velocidadActual||0}</td>
         <td style="font-weight:700;font-size:12px;white-space:nowrap;color:${vp!=="—"?velColor(Number(vp)):"#475569"}">${vp!=="—"?vp+"%":"—"}</td>
-        <td style="font-size:11px;color:#64748B;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(o.ajustes||[]).map(a=>a.descripcion+(a.reporta?' ['+a.reporta+']':'')).join(' | ')}">${(o.ajustes||[]).length} nov.</td>
+        <td style="font-size:11px;color:#64748B">${(o.ajustes||[]).length} nov.</td>
       </tr>`;
     });
     html+=`</tbody></table></div>`;
@@ -913,11 +1029,23 @@ function renderReporte() {
 }
 
 function buildReporteRows(){
+  // Apply same filters as renderReporte
+  const fOp  = document.getElementById("f-fil-op")?.value  || "";
+  const fMaq = document.getElementById("f-fil-maq")?.value || "";
+  const fTur = document.getElementById("f-fil-tur")?.value || "";
+  const fEst = document.getElementById("f-fil-est")?.value || "";
+  const source = orders.filter(o=>{
+    if(fOp  && o.operario!==fOp)  return false;
+    if(fMaq && o.maquina!==fMaq)  return false;
+    if(fEst && o.status!==fEst)   return false;
+    if(fTur){const fa=o.history&&o.history.length>0?o.history[0].at:o.createdAt;if(getTurno(fa)!==fTur)return false;}
+    return true;
+  });
   const rows=[["Orden","Producto","Cliente","Máquina","Operario","Turno","Fecha","Estado",
     "T.Montaje","T.Ajuste","T.Producción","T.Total",
-    "Vel.Objetivo","Vel.Real","Eficiencia%",
+    "Metros","Vel.Objetivo","Vel.Real","Eficiencia%",
     "Cant.Novedades","Detalle Novedades","Historial Estados"]];
-  orders.forEach(o=>{
+  source.forEach(o=>{
     const t=computeTimes(o);
     const tTotal=(t.tSetup||0)+(t.tAjuste||0)+(t.tProduccion||0)+(t.tFinalizada||0);
     const vp=Number(o.velocidadObjetivo)>0?((Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100).toFixed(1):"";
@@ -928,7 +1056,7 @@ function buildReporteRows(){
       o.ordenId, o.producto, o.cliente||"", o.maquina||"", o.operario||"",
       o.turno||getTurno(firstAt), getFechaCol(firstAt), STATUS_CONFIG[o.status]?.label||o.status,
       fmtTime(t.tSetup), fmtTime(t.tAjuste), fmtTime(t.tProduccion), fmtTime(tTotal),
-      o.velocidadObjetivo||0, o.velocidadActual||0, vp?vp+"%":"—",
+      Number(o.metros||0), o.velocidadObjetivo||0, o.velocidadActual||0, vp?vp+"%":"—",
       (o.ajustes||[]).length, novStr||"—", histStr,
     ]);
   });
