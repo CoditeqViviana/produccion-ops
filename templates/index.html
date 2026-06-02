@@ -376,6 +376,31 @@ function renderDashboard() {
     orders.filter(o=>o.status!=="finalizada").forEach(order=>{
       const t=computeTimes(order);
       const vp=Number(order.velocidadObjetivo)>0?Math.min((Number(order.velocidadActual)/Number(order.velocidadObjetivo))*100,100):0;
+      // Velocity display for card
+      const velObj=Number(order.velocidadObjetivo)||0;
+      const velReal=Number(order.velocidadActual)||0;
+      const velPctFull=velObj>0?((velReal/velObj)*100):0;
+      const velRowHtml=velObj>0?('<div style="background:#0F172A;border-radius:8px;padding:8px 12px;margin-bottom:10px;border:1px solid #1E293B">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'+
+          '<span style="font-size:10px;color:#64748B;font-weight:600">⚡ VELOCIDAD</span>'+
+          '<span style="font-size:11px;font-weight:700;font-family:JetBrains Mono,monospace;color:'+velColor(velPctFull)+'">'+velPctFull.toFixed(0)+'%</span>'+
+        '</div>'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">'+
+          '<div style="flex:1;text-align:center;background:#1E293B;border-radius:6px;padding:5px">'+
+            '<div style="font-size:9px;color:#64748B">Real</div>'+
+            '<div style="font-size:20px;font-weight:700;color:'+velColor(velPctFull)+';font-family:JetBrains Mono,monospace">'+velReal+'</div>'+
+            '<div style="font-size:9px;color:#475569">uds/hr</div>'+
+          '</div>'+
+          '<div style="color:#475569;font-size:11px">vs</div>'+
+          '<div style="flex:1;text-align:center;background:#1E293B;border-radius:6px;padding:5px">'+
+            '<div style="font-size:9px;color:#64748B">Objetivo</div>'+
+            '<div style="font-size:20px;font-weight:700;color:#64748B;font-family:JetBrains Mono,monospace">'+velObj+'</div>'+
+            '<div style="font-size:9px;color:#475569">uds/hr</div>'+
+          '</div>'+
+        '</div>'+
+        '<div style="background:#1E293B;border-radius:4px;height:5px;overflow:hidden">'+
+          '<div style="width:'+Math.min(velPctFull,100)+'%;background:'+velColor(velPctFull)+';height:100%;border-radius:4px"></div>'+
+        '</div></div>'):'';
       const vc=velColor(vp);
       const acc=getAcciones(order);
       const cfg=STATUS_CONFIG[order.status]||STATUS_CONFIG.setup;
@@ -418,24 +443,7 @@ function renderDashboard() {
           </svg>
           <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px">${timeRows}</div>
         </div>
-        ${(()=>{
-          const eta=calcETA(order);
-          if(!eta) return "";
-          return `<div style="background:#0F172A;border-radius:8px;padding:8px 12px;margin-bottom:10px;border:1px solid #1E293B;display:flex;justify-content:space-between;align-items:center">
-            <div>
-              <div style="font-size:10px;color:#64748B">⏰ Hora estimada fin</div>
-              <div style="font-size:16px;font-weight:700;color:#10B981;font-family:'JetBrains Mono',monospace">${eta.hora}</div>
-              <div style="font-size:10px;color:#64748B">${eta.remaining} min restantes · ${eta.pct}% avance</div>
-            </div>
-            <div style="width:44px;height:44px">
-              <svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="none" stroke="#1E293B" stroke-width="4"/>
-              <circle cx="22" cy="22" r="18" fill="none" stroke="#10B981" stroke-width="4"
-                stroke-dasharray="${(2*Math.PI*18).toFixed(1)}" stroke-dashoffset="${((2*Math.PI*18)*(1-eta.pct/100)).toFixed(1)}"
-                stroke-linecap="round" transform="rotate(-90 22 22)"/>
-              <text x="22" y="26" text-anchor="middle" fill="#10B981" font-size="9" font-weight="700">${eta.pct}%</text></svg>
-            </div>
-          </div>`;
-        })()}
+        ${velRowHtml}
         <div style="margin-bottom:12px">${accHtml}</div>
         <div style="display:flex;gap:5px;flex-wrap:wrap">
           ${btns}
@@ -880,8 +888,10 @@ async function loadCatalog() {
 // REPORTE
 // ═══════════════════════════════════════════════
 function renderReporte() {
+  try {
   const el = document.getElementById("view-reporte");
   if(!el) { setTimeout(renderReporte, 150); return; }
+  if(el.style.display==="none") { return; }
   const todas = [...orders];
   if(todas.length===0){
     document.getElementById("view-reporte").innerHTML=`<div class="card" style="padding:60px;text-align:center">
@@ -921,6 +931,20 @@ function renderReporte() {
   const turnos    = ["T1 (06:00-14:00)","T2 (14:00-22:00)","T3 (22:00-06:00)"];
   const estados   = Object.entries(STATUS_CONFIG).map(([k,v])=>({k,l:v.label}));
 
+  // Pre-build filter options to avoid nested template literals
+  const opOpts   = operarios.map(op=>'<option value="'+op+'" '+(fOp===op?'selected':'')+'>'+op.split(" ").slice(0,2).join(" ")+'</option>').join("");
+  const maqOpts  = maquinas.map(m=>'<option value="'+m+'" '+(fMaq===m?'selected':'')+'>'+m+'</option>').join("");
+  const turOpts  = turnos.map(t=>'<option value="'+t+'" '+(fTur===t?'selected':'')+'>'+t+'</option>').join("");
+  const estOpts  = estados.map(e=>'<option value="'+e.k+'" '+(fEst===e.k?'selected':'')+'>'+e.l+'</option>').join("");
+  const kpiData  = [
+    {l:"Finalizadas", v:totalFin, c:"#10B981", sub:"órdenes completadas"},
+    {l:"En Proceso",  v:totalAct, c:"#F59E0B", sub:"órdenes activas"},
+    {l:"Metros Tot.", v:totalMetros.toLocaleString("es-CO"), c:"#3B82F6", sub:"metros lineales"},
+    {l:"Eficiencia",  v:avgEfic>0?avgEfic.toFixed(0)+"%":"—", c:avgEfic>0?velColor(avgEfic):"#475569", sub:"vel.real ÷ vel.obj × 100"},
+  ];
+  const kpiHtml = kpiData.map(k=>'<div class="card" style="padding:16px"><div style="font-size:11px;color:#64748B;margin-bottom:4px">'+k.l+'</div><div style="font-size:26px;font-weight:700;color:'+k.c+';font-family:JetBrains Mono,monospace">'+k.v+'</div><div style="font-size:10px;color:#475569;margin-top:4px">'+k.sub+'</div></div>').join("");
+  const limpiarBtn = filtered.length<todas.length ? '<button onclick="limpiarFiltros()" style="margin-left:8px;padding:2px 8px;font-size:11px;background:#334155;color:#94A3B8;border:none;border-radius:4px;cursor:pointer">✕ Limpiar</button>' : "";
+
   let html = `
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:12px">
     <h2 style="font-size:20px;font-weight:700">📈 Reporte de Producción</h2>
@@ -931,7 +955,6 @@ function renderReporte() {
     </div>
   </div>
 
-  <!-- FILTROS -->
   <div class="card" style="padding:16px;margin-bottom:20px">
     <div style="font-size:12px;color:#64748B;margin-bottom:10px;font-weight:600">🔍 FILTROS</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
@@ -939,49 +962,39 @@ function renderReporte() {
         <label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">Operario</label>
         <select id="f-fil-op" class="inp" style="font-size:12px;padding:7px 10px" onchange="renderReporte()">
           <option value="">Todos</option>
-          ${operarios.map(op=>`<option value="${op}" ${fOp===op?"selected":""}>${op.split(" ").slice(0,2).join(" ")}</option>`).join("")}
+          ${opOpts}
         </select>
       </div>
       <div>
         <label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">Máquina</label>
         <select id="f-fil-maq" class="inp" style="font-size:12px;padding:7px 10px" onchange="renderReporte()">
           <option value="">Todas</option>
-          ${maquinas.map(m=>`<option value="${m}" ${fMaq===m?"selected":""}>${m}</option>`).join("")}
+          ${maqOpts}
         </select>
       </div>
       <div>
         <label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">Turno</label>
         <select id="f-fil-tur" class="inp" style="font-size:12px;padding:7px 10px" onchange="renderReporte()">
           <option value="">Todos</option>
-          ${turnos.map(t=>`<option value="${t}" ${fTur===t?"selected":""}>${t}</option>`).join("")}
+          ${turOpts}
         </select>
       </div>
       <div>
         <label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">Estado</label>
         <select id="f-fil-est" class="inp" style="font-size:12px;padding:7px 10px" onchange="renderReporte()">
           <option value="">Todos</option>
-          ${estados.map(e=>`<option value="${e.k}" ${fEst===e.k?"selected":""}>${e.l}</option>`).join("")}
+          ${estOpts}
         </select>
       </div>
     </div>
     <div style="font-size:11px;color:#475569;margin-top:10px">
       Mostrando <strong style="color:#E2E8F0">${filtered.length}</strong> de ${todas.length} órdenes
-      ${filtered.length<todas.length?`<button onclick="document.querySelectorAll('#f-fil-op,#f-fil-maq,#f-fil-tur,#f-fil-est').forEach(s=>s.value='');renderReporte()" style="margin-left:8px;padding:2px 8px;font-size:11px;background:#334155;color:#94A3B8;border:none;border-radius:4px;cursor:pointer">✕ Limpiar</button>`:""}
+      ${limpiarBtn}
     </div>
   </div>
 
-  <!-- KPIs -->
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
-    ${[
-      {l:"Finalizadas",  v:totalFin,                    c:"#10B981",  sub:"órdenes completadas"},
-      {l:"En Proceso",   v:totalAct,                    c:"#F59E0B",  sub:"órdenes activas"},
-      {l:"Metros Tot.",  v:totalMetros.toLocaleString("es-CO"), c:"#3B82F6", sub:"metros lineales"},
-      {l:"Eficiencia",   v:avgEfic>0?avgEfic.toFixed(0)+"%":"—", c:avgEfic>0?velColor(avgEfic):"#475569", sub:"vel.real ÷ vel.objetivo × 100"},
-    ].map(k=>`<div class="card" style="padding:16px">
-      <div style="font-size:11px;color:#64748B;margin-bottom:4px">${k.l}</div>
-      <div style="font-size:26px;font-weight:700;color:${k.c};font-family:'JetBrains Mono',monospace">${k.v}</div>
-      <div style="font-size:10px;color:#475569;margin-top:4px">${k.sub}</div>
-    </div>`).join("")}
+  <div style="display:grid;grid-template-columns:repeat(4,1fr)gap:14px;margin-bottom:20px">
+    ${kpiHtml}
   </div>
 
   <!-- FÓRMULA EFICIENCIA -->
@@ -1033,8 +1046,22 @@ function renderReporte() {
   }
   const reporteEl = document.getElementById("view-reporte");
   if(reporteEl) reporteEl.innerHTML=html;
+  } catch(err) {
+    const el=document.getElementById("view-reporte");
+    if(el) el.innerHTML=`<div class="card" style="padding:40px;text-align:center;color:#FCA5A5">
+      <div style="font-size:32px;margin-bottom:12px">⚠️</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px">Error al cargar el reporte</div>
+      <div style="font-size:12px;color:#64748B;font-family:monospace">${err.message}</div>
+      <button onclick="renderReporte()" style="margin-top:16px;padding:8px 20px;background:#3B82F6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px">🔄 Reintentar</button>
+    </div>`;
+    console.error("renderReporte error:", err);
+  }
 }
 
+function limpiarFiltros(){
+  ["f-fil-op","f-fil-maq","f-fil-tur","f-fil-est"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  renderReporte();
+}
 function buildReporteRows(){
   // Apply same filters as renderReporte
   const fOp  = document.getElementById("f-fil-op")?.value  || "";
