@@ -95,6 +95,7 @@ input.inp:focus,select.inp:focus{border-color:#3B82F6}
   <div id="nav">
     <input type="file" id="excel-input" accept=".xlsx,.xls" style="display:none"/>
     <button class="btn" onclick="document.getElementById('excel-input').click()" style="padding:6px 14px;font-size:12px;background:#064E3B;color:#6EE7B7;border:1px solid #065F46">📂 Subir Excel</button>
+    <button class="btn" onclick="confirmReset()" style="padding:6px 14px;font-size:12px;background:#7F1D1D;color:#FCA5A5;border:1px solid #991B1B" title="Borrar todas las órdenes">🗑️ Reset</button>
     <button class="nav-btn active" id="nav-dashboard" onclick="setView('dashboard')">📊 Dashboard</button>
     <button class="nav-btn" id="nav-maquinas"  onclick="setView('maquinas')">🖥️ Por Máquina</button>
     <button class="nav-btn" id="nav-ordenes"   onclick="setView('ordenes')">📋 Órdenes</button>
@@ -171,12 +172,17 @@ const OPERARIOS = [
 ];
 
 function getTurno(isoDate) {
-  // T1: 06:00-14:00, T2: 14:00-22:00, T3: 22:00-06:00
+  // T1: 06:00-14:00, T2: 14:00-22:00, T3: 22:00-06:00 — Colombia GMT-5
   const d = new Date(isoDate);
-  const h = d.getHours();
-  if (h >= 6  && h < 14) return "T1 (06:00–14:00)";
-  if (h >= 14 && h < 22) return "T2 (14:00–22:00)";
-  return "T3 (22:00–06:00)";
+  const h = new Date(d.getTime() - 5*60*60*1000).getUTCHours();
+  if (h >= 6  && h < 14) return "T1 (06:00-14:00)";
+  if (h >= 14 && h < 22) return "T2 (14:00-22:00)";
+  return "T3 (22:00-06:00)";
+}
+function getFechaCol(isoDate) {
+  if (!isoDate) return "—";
+  const d = new Date(new Date(isoDate).getTime() - 5*60*60*1000);
+  return d.toISOString().slice(0,10).split("-").reverse().join("/");
 }
 function getFecha(isoDate) {
   if (!isoDate) return "—";
@@ -879,7 +885,7 @@ function renderReporte() {
       const cfg=STATUS_CONFIG[o.status]||STATUS_CONFIG.setup;
       const firstAt=o.history&&o.history.length>0?o.history[0].at:o.createdAt;
       const turno=getTurno(firstAt);
-      const fecha=getFecha(firstAt);
+      const fecha=getFechaCol(firstAt);
       const ajustesLista=(o.ajustes||[]).map(a=>a.descripcion).join(" | ")||"—";
 
       html+=`<tr style="background:${i%2?"#0F172A10":"transparent"}">
@@ -920,7 +926,7 @@ function buildReporteRows(){
     const novStr=(o.ajustes||[]).map(a=>`${a.descripcion}${a.reporta?" ["+a.reporta+"]":""}${a.duracion?" ("+a.duracion+"min)":""}`).join(" | ");
     rows.push([
       o.ordenId, o.producto, o.cliente||"", o.maquina||"", o.operario||"",
-      o.turno||getTurno(firstAt), getFecha(firstAt), STATUS_CONFIG[o.status]?.label||o.status,
+      o.turno||getTurno(firstAt), getFechaCol(firstAt), STATUS_CONFIG[o.status]?.label||o.status,
       fmtTime(t.tSetup), fmtTime(t.tAjuste), fmtTime(t.tProduccion), fmtTime(tTotal),
       o.velocidadObjetivo||0, o.velocidadActual||0, vp?vp+"%":"—",
       (o.ajustes||[]).length, novStr||"—", histStr,
@@ -961,6 +967,21 @@ function exportReporte(fmt) {
     a.download=`reporte-produccion-${fecha}.csv`;
     a.click();
   }
+}
+
+// ═══════════════════════════════════════════════
+// RESET
+// ═══════════════════════════════════════════════
+async function confirmReset() {
+  if(!confirm("⚠️ ¿Borrar TODAS las órdenes? Esta acción no se puede deshacer.")) return;
+  const r = await fetch("/api/reset", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({secret:"coditeq2024"})
+  });
+  const d = await r.json();
+  if(d.ok) showStatusBar("✅ Todas las órdenes eliminadas", true);
+  else     showStatusBar("❌ Error: " + d.error, false);
 }
 
 // ═══════════════════════════════════════════════
