@@ -232,11 +232,30 @@ let tickInterval = null;
 // SSE — real-time connection
 // ═══════════════════════════════════════════════
 function connectSSE() {
+  setConnLabel(false);
   const es = new EventSource("/stream");
-  es.addEventListener("init",   e => { onData(JSON.parse(e.data)); });
-  es.addEventListener("update", e => { onData(JSON.parse(e.data)); });
-  es.onopen  = () => setConnLabel(true);
-  es.onerror = () => { setConnLabel(false); setTimeout(connectSSE, 3000); es.close(); };
+  es.addEventListener("init",   e => { try { onData(JSON.parse(e.data)); } catch(err){console.error(err);} });
+  es.addEventListener("update", e => { try { onData(JSON.parse(e.data)); } catch(err){console.error(err);} });
+  es.onopen  = () => { setConnLabel(true); };
+  es.onerror = () => {
+    setConnLabel(false);
+    es.close();
+    // Retry with backoff: 3s first, then 8s
+    const delay = window._sseRetries > 2 ? 8000 : 3000;
+    window._sseRetries = (window._sseRetries||0) + 1;
+    setTimeout(connectSSE, delay);
+  };
+  // Also fallback: if no data in 15s, reload orders via REST
+  clearTimeout(window._sseFallback);
+  window._sseFallback = setTimeout(async ()=>{
+    if(orders.length===0){
+      try {
+        const r = await fetch("/api/orders");
+        const d = await r.json();
+        if(d.orders && d.orders.length >= 0){ orders = d.orders; renderCurrent(); }
+      } catch(e){}
+    }
+  }, 15000);
 }
 function setConnLabel(ok) {
   document.getElementById("conn-label").textContent = ok ? "en vivo" : "reconectando…";
@@ -1174,9 +1193,12 @@ async function confirmReset() {
 // ═══════════════════════════════════════════════
 // BOOT
 // ═══════════════════════════════════════════════
+window._sseRetries = 0;
 connectSSE();
 loadCatalog();
 startTick();
+// Render immediately so page isn't blank while connecting
+renderCurrent();
 </script>
 </body>
 </html>
