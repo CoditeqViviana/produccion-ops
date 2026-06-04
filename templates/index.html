@@ -171,6 +171,12 @@ const OPERARIOS = [
   "SERRANO CARDENAS ANDRES FABIAN",
 ];
 
+const REPORTANTES = [
+  "ALVARADO CORREDOR JIMMY ALEJANDRO",
+  "BRICEÑO ARENAS LIZ ANYURY",
+  "DIAZ ORJUELA MARTHA NANCI",
+];
+
 function getTurno(isoDate) {
   // T1: 06:00-14:00, T2: 14:00-22:00, T3: 22:00-06:00 — Colombia GMT-5
   const d = new Date(isoDate);
@@ -420,7 +426,7 @@ function renderDashboard() {
 
       const btns=STATUS_KEYS.filter(k=>k!==order.status).map(k=>{
         const sc=STATUS_CONFIG[k];
-        return `<button class="btn" onclick="patchStatus('${order.id}','${k}')" style="padding:4px 10px;font-size:11px;background:${sc.dark};color:#fff">${sc.icon}</button>`;
+        return '<button class="btn" onclick="patchStatus(''+order.id+'',''+k+'')" style="padding:4px 10px;font-size:11px;background:'+sc.dark+';color:#fff">'+sc.icon+'</button>';
       }).join("");
 
       html+=`<div class="card order-card ${isAlert?"alert":""}" style="border-color:${isAlert?"#EF444440":"#334155"}">
@@ -701,10 +707,15 @@ function renderDetalle() {
   const statusBtns=STATUS_KEYS.map(k=>{
     const sc=STATUS_CONFIG[k];
     const isCur=order.status===k;
-    return `<button class="btn" onclick="patchStatus('${order.id}','${k}')" ${isCur?"disabled":""}
-      style="padding:10px;font-size:13px;text-align:left;width:100%;background:${isCur?sc.color:"#0F172A"};color:${isCur?"#fff":"#94A3B8"};border:1px solid ${isCur?sc.color:"#334155"};opacity:${isCur?"1":".85"}">
-      ${sc.icon} ${sc.label} ${isCur?"← actual":""}
-    </button>`;
+    const clickHandler = isCur ? "" : `onclick="patchStatus('${order.id}','${k}')"`;
+    return '<button class="btn" '+clickHandler+' '+(isCur?'disabled':'')+
+      ' style="padding:10px;font-size:13px;text-align:left;width:100%;cursor:'+(isCur?'default':'pointer')+
+      ';background:'+(isCur?sc.color:'#0F172A')+
+      ';color:'+(isCur?'#fff':'#94A3B8')+
+      ';border:1px solid '+(isCur?sc.color:'#334155')+
+      ';opacity:'+(isCur?'1':'.85')+'">'+
+      sc.icon+' '+sc.label+(isCur?' ← actual':'')+
+    '</button>';
   }).join("");
 
   // Ajustes list
@@ -796,7 +807,21 @@ function renderDetalle() {
 // API CALLS
 // ═══════════════════════════════════════════════
 async function patchStatus(id, status) {
-  await fetch(`/api/orders/${id}/status`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});
+  // Optimistic update — update local state immediately so UI responds
+  const order = orders.find(o=>o.id===id);
+  if(order) {
+    const now = new Date().toISOString();
+    order.status = status;
+    order.history = [...(order.history||[]), {status, at: now}];
+    if(status==="finalizada") order.finalizadaAt = now;
+    renderCurrent(); // re-render immediately with new state
+  }
+  // Then persist to server
+  const r = await fetch(`/api/orders/${id}/status`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});
+  if(!r.ok) {
+    // Revert on error - SSE will correct it
+    console.error("patchStatus failed:", await r.text());
+  }
 }
 async function patchVel(id) {
   const el=document.getElementById("vel-inp");
@@ -814,7 +839,7 @@ function openModal(oid) {
   document.getElementById("aj-dur").value="";
   // Populate operarios in reporta select
   const sel=document.getElementById("aj-reporta");
-  sel.innerHTML='<option value="">— Seleccionar —</option>'+OPERARIOS.map(op=>`<option value="${op}">${op}</option>`).join("");
+  sel.innerHTML='<option value="">— Seleccionar —</option>'+REPORTANTES.map(op=>`<option value="${op}">${op}</option>`).join("");
   document.getElementById("modal").classList.add("open");
   setTimeout(()=>document.getElementById("aj-desc").focus(),100);
 }
