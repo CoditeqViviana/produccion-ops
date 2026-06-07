@@ -1199,6 +1199,8 @@ loadCatalog();
 startTick();
 // Render immediately so page isn't blank while connecting
 renderCurrent();
+// Keep server alive — ping every 10 minutes so Render never sleeps
+setInterval(()=>{ fetch("/ping").catch(()=>{}); }, 10 * 60 * 1000);
 </script>
 </body>
 </html>
