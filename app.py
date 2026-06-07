@@ -8,32 +8,39 @@ app = Flask(__name__)
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
+DATABASE_URL_RAW = os.environ.get("DATABASE_URL", "")
+# Render gives postgres:// but psycopg2 needs postgresql://
+DATABASE_URL = DATABASE_URL_RAW.replace("postgres://", "postgresql://", 1) if DATABASE_URL_RAW.startswith("postgres://") else DATABASE_URL_RAW
 
 def get_db():
     conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    conn.autocommit = False
     return conn
 
 def init_db():
     """Create tables if they don't exist."""
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS orders (
-                    id TEXT PRIMARY KEY,
-                    data JSONB NOT NULL,
-                    created_at TIMESTAMPTZ DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ DEFAULT NOW()
-                );
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS catalog (
-                    id SERIAL PRIMARY KEY,
-                    data JSONB NOT NULL,
-                    updated_at TIMESTAMPTZ DEFAULT NOW()
-                );
-            """)
-        conn.commit()
+    print(f"Connecting to DB: {DATABASE_URL[:40]}...")
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            id TEXT PRIMARY KEY,
+            data JSONB NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS catalog (
+            id SERIAL PRIMARY KEY,
+            data JSONB NOT NULL,
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("✅ Tables ready")
 
 # ── SSE broadcast ────────────────────────────────────────────────────────────
 subscribers = []
@@ -41,11 +48,12 @@ subs_lock   = threading.Lock()
 
 def get_all_orders():
     try:
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT data FROM orders ORDER BY (data->>'createdAt') ASC")
-                rows = cur.fetchall()
-                return [r["data"] for r in rows]
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT data FROM orders ORDER BY (data->>'createdAt') ASC")
+        rows = cur.fetchall()
+        cur.close(); conn.close()
+        return [r["data"] for r in rows]
     except Exception as e:
         print("DB error get_orders:", e)
         return []
@@ -125,14 +133,14 @@ def create_order():
         "history":           [{"status": data.get("status", "setup"), "at": now}],
     }
     try:
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO orders (id, data) VALUES (%s, %s)",
-                    (order["id"], json.dumps(order))
-                )
-            conn.commit()
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO orders (id, data) VALUES (%s, %s)",
+                    (order["id"], json.dumps(order)))
+        conn.commit()
+        cur.close(); conn.close()
     except Exception as e:
+        print("DB error create_order:", e)
         return jsonify({"error": str(e)}), 500
     broadcast()
     return jsonify(order), 201
@@ -142,22 +150,24 @@ def update_status(oid):
     new_status = request.json.get("status")
     now = datetime.utcnow().isoformat() + "Z"
     try:
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT data FROM orders WHERE id=%s", (oid,))
-                row = cur.fetchone()
-                if not row: return jsonify({"error": "not found"}), 404
-                order = row["data"]
-                order["status"]  = new_status
-                order["history"] = order.get("history", []) + [{"status": new_status, "at": now}]
-                if new_status == "finalizada":
-                    order["finalizadaAt"] = now
-                cur.execute(
-                    "UPDATE orders SET data=%s, updated_at=NOW() WHERE id=%s",
-                    (json.dumps(order), oid)
-                )
-            conn.commit()
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT data FROM orders WHERE id=%s", (oid,))
+        row = cur.fetchone()
+        if not row:
+            cur.close(); conn.close()
+            return jsonify({"error": "not found"}), 404
+        order = row["data"]
+        order["status"]  = new_status
+        order["history"] = order.get("history", []) + [{"status": new_status, "at": now}]
+        if new_status == "finalizada":
+            order["finalizadaAt"] = now
+        cur.execute("UPDATE orders SET data=%s, updated_at=NOW() WHERE id=%s",
+                    (json.dumps(order), oid))
+        conn.commit()
+        cur.close(); conn.close()
     except Exception as e:
+        print("DB error update_status:", e)
         return jsonify({"error": str(e)}), 500
     broadcast()
     return jsonify({"ok": True})
@@ -166,19 +176,21 @@ def update_status(oid):
 def update_velocidad(oid):
     vel = request.json.get("velocidadActual", 0)
     try:
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT data FROM orders WHERE id=%s", (oid,))
-                row = cur.fetchone()
-                if not row: return jsonify({"error": "not found"}), 404
-                order = row["data"]
-                order["velocidadActual"] = vel
-                cur.execute(
-                    "UPDATE orders SET data=%s, updated_at=NOW() WHERE id=%s",
-                    (json.dumps(order), oid)
-                )
-            conn.commit()
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT data FROM orders WHERE id=%s", (oid,))
+        row = cur.fetchone()
+        if not row:
+            cur.close(); conn.close()
+            return jsonify({"error": "not found"}), 404
+        order = row["data"]
+        order["velocidadActual"] = vel
+        cur.execute("UPDATE orders SET data=%s, updated_at=NOW() WHERE id=%s",
+                    (json.dumps(order), oid))
+        conn.commit()
+        cur.close(); conn.close()
     except Exception as e:
+        print("DB error update_vel:", e)
         return jsonify({"error": str(e)}), 500
     broadcast()
     return jsonify({"ok": True})
@@ -194,19 +206,21 @@ def add_ajuste(oid):
         "at":          now
     }
     try:
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT data FROM orders WHERE id=%s", (oid,))
-                row = cur.fetchone()
-                if not row: return jsonify({"error": "not found"}), 404
-                order = row["data"]
-                order.setdefault("ajustes", []).append(ajuste)
-                cur.execute(
-                    "UPDATE orders SET data=%s, updated_at=NOW() WHERE id=%s",
-                    (json.dumps(order), oid)
-                )
-            conn.commit()
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT data FROM orders WHERE id=%s", (oid,))
+        row = cur.fetchone()
+        if not row:
+            cur.close(); conn.close()
+            return jsonify({"error": "not found"}), 404
+        order = row["data"]
+        order.setdefault("ajustes", []).append(ajuste)
+        cur.execute("UPDATE orders SET data=%s, updated_at=NOW() WHERE id=%s",
+                    (json.dumps(order), oid))
+        conn.commit()
+        cur.close(); conn.close()
     except Exception as e:
+        print("DB error add_ajuste:", e)
         return jsonify({"error": str(e)}), 500
     broadcast()
     return jsonify({"ok": True})
@@ -215,29 +229,30 @@ def add_ajuste(oid):
 def upload_catalog():
     rows = request.json.get("rows", [])
     try:
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                cur.execute("DELETE FROM catalog")
-                if rows:
-                    cur.execute(
-                        "INSERT INTO catalog (data) VALUES (%s)",
-                        (json.dumps(rows),)
-                    )
-            conn.commit()
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM catalog")
+        if rows:
+            cur.execute("INSERT INTO catalog (data) VALUES (%s)", (json.dumps(rows),))
+        conn.commit()
+        cur.close(); conn.close()
     except Exception as e:
+        print("DB error catalog upload:", e)
         return jsonify({"error": str(e)}), 500
     return jsonify({"ok": True, "count": len(rows)})
 
 @app.route("/api/catalog", methods=["GET"])
 def get_catalog():
     try:
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT data FROM catalog ORDER BY id DESC LIMIT 1")
-                row = cur.fetchone()
-                catalog = row["data"] if row else []
-                return jsonify({"catalog": catalog})
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT data FROM catalog ORDER BY id DESC LIMIT 1")
+        row = cur.fetchone()
+        catalog = row["data"] if row else []
+        cur.close(); conn.close()
+        return jsonify({"catalog": catalog})
     except Exception as e:
+        print("DB error get_catalog:", e)
         return jsonify({"catalog": [], "error": str(e)})
 
 # Auto-init DB on startup
@@ -250,6 +265,10 @@ try:
 except Exception as e:
     print("❌ DB init error:", e)
 
+@app.route("/ping")
+def ping():
+    return "pong", 200
+
 @app.route("/api/reset", methods=["POST"])
 def reset_orders():
     """Delete all orders — use with care."""
@@ -257,13 +276,15 @@ def reset_orders():
     if secret != "coditeq2024":
         return jsonify({"error": "unauthorized"}), 403
     try:
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                cur.execute("DELETE FROM orders")
-            conn.commit()
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM orders")
+        conn.commit()
+        cur.close(); conn.close()
         broadcast()
         return jsonify({"ok": True, "msg": "All orders deleted"})
     except Exception as e:
+        print("DB error reset:", e)
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
