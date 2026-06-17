@@ -3,1217 +3,905 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>ProducciónOps — Tablero en Vivo</title>
+<title>ProducciónOps</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'DM Sans','Segoe UI',sans-serif;background:#0F172A;color:#E2E8F0;min-height:100vh}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#0F172A;color:#E2E8F0;min-height:100vh}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#1E293B}::-webkit-scrollbar-thumb{background:#334155;border-radius:3px}
-@media print{body{background:#fff;color:#000}#hdr{display:none!important}#status-bar{display:none!important}#main{padding:0}.card{border:1px solid #ccc;background:#fff}.badge{border:1px solid #ccc}#view-dashboard{display:none!important}#view-maquinas{display:none!important}#view-ordenes{display:none!important}#view-nueva{display:none!important}#view-detalle{display:none!important}#view-reporte{display:block!important}}
 .card{background:#1E293B;border:1px solid #334155;border-radius:12px}
-.btn{cursor:pointer;border:none;border-radius:8px;font-family:inherit;font-weight:600;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
-.btn:hover{filter:brightness(1.15);transform:translateY(-1px)}
-.btn:active{transform:translateY(0)}
-.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.btn{cursor:pointer;border:none;border-radius:8px;font-family:inherit;font-weight:600}
+.btn:hover{filter:brightness(1.15)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
 .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
-.pulse{animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-.fade-in{animation:fadeIn .3s ease}
-@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-/* header */
-#hdr{background:#0F172A;border-bottom:1px solid #1E293B;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:100}
-#hdr-left{display:flex;align-items:center;gap:12px}
-#logo{width:32px;height:32px;background:linear-gradient(135deg,#3B82F6,#8B5CF6);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
-#live-dot{width:8px;height:8px;background:#10B981;border-radius:50%;margin-left:4px}
-#nav{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.nav-btn{padding:6px 16px;font-size:13px;border:1px solid #334155;background:#1E293B;color:#94A3B8;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600;transition:all .15s}
-.nav-btn.active,.nav-btn:hover{background:#3B82F6;color:#fff;border-color:#3B82F6}
-/* status bar */
-#status-bar{padding:6px 24px;font-size:12px;display:flex;justify-content:space-between;align-items:center;display:none}
-/* main */
+.inp{width:100%;padding:10px 12px;background:#0F172A;border:1px solid #334155;border-radius:8px;color:#E2E8F0;font-size:14px;font-family:inherit}
+#hdr{background:#0F172A;border-bottom:1px solid #1E293B;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;flex-wrap:wrap;gap:8px}
+#hdr-left{display:flex;align-items:center;gap:10px;padding:8px 0}
+#nav{display:flex;gap:6px;flex-wrap:wrap;padding:8px 0}
+.nav-btn{padding:6px 14px;font-size:12px;border:1px solid #334155;background:#1E293B;color:#94A3B8;border-radius:8px;cursor:pointer;font-weight:600}
+.nav-btn.active{background:#3B82F6;color:#fff;border-color:#3B82F6}
 #main{padding:24px;max-width:1500px;margin:0 auto}
-/* kpis */
 .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
-.kpi{padding:20px}
-.kpi-label{font-size:12px;color:#64748B;margin-bottom:6px;font-weight:500}
-.kpi-val{font-size:32px;font-weight:700;font-family:'JetBrains Mono',monospace;line-height:1}
-.kpi-sub{font-size:11px;color:#475569;margin-top:6px}
-.kpi-icon{font-size:28px}
-/* order cards */
-.orders-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(390px,1fr));gap:16px}
-.order-card{padding:20px;transition:border-color .3s}
-.order-card.alert{border-color:#EF444440!important}
-/* table */
+.orders-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:16px}
 .tbl{width:100%;border-collapse:collapse;font-size:12px}
-.tbl th{padding:10px 14px;text-align:left;color:#64748B;font-weight:600;white-space:nowrap;border-bottom:1px solid #334155}
-.tbl td{padding:10px 14px;border-bottom:1px solid #1E293B}
-.tbl tr:nth-child(even) td{background:#0F172A10}
-/* machine view */
-.maq-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:20px}
-/* forms */
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-label.lbl{display:block;font-size:12px;color:#64748B;margin-bottom:6px;font-weight:500}
-input.inp,select.inp,textarea.inp{width:100%;padding:10px 12px;background:#0F172A;border:1px solid #334155;border-radius:8px;color:#E2E8F0;font-size:14px;font-family:inherit;outline:none}
-input.inp:focus,select.inp:focus{border-color:#3B82F6}
-/* detail grid */
+.tbl th{padding:10px 12px;text-align:left;color:#64748B;font-weight:600;white-space:nowrap;border-bottom:1px solid #334155}
+.tbl td{padding:10px 12px;border-bottom:1px solid #1E293B}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .detail-grid{display:grid;grid-template-columns:2fr 1fr;gap:20px}
-.state-times{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
-.time-box{background:#0F172A;border-radius:10px;padding:12px;border:1px solid #1E293B;transition:border-color .3s}
-.time-box.live{border-color:var(--c)!important}
-/* accion alerts */
-.accion{font-size:12px;padding:7px 10px;border-radius:7px;margin-bottom:5px}
-.accion.critica{background:#7F1D1D20;color:#FCA5A5;border:1px solid #7F1D1D60}
-.accion.advertencia{background:#78350F20;color:#FCD34D;border:1px solid #78350F60}
-.accion.ok{background:#052E1620;color:#6EE7B7;border:1px solid #052E1660}
-/* history */
-.hist-item{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px}
-.hist-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
-/* velocity bar */
-.vel-bar-wrap{background:#0F172A;border-radius:8px;height:10px;overflow:hidden;margin:8px 0}
-.vel-bar{height:100%;border-radius:8px;transition:width .4s}
-/* empty state */
-.empty-state{padding:60px;text-align:center}
-/* modal overlay */
-#modal{position:fixed;inset:0;background:#00000080;z-index:200;display:none;align-items:center;justify-content:center}
+#modal{position:fixed;inset:0;background:#00000090;display:none;align-items:center;justify-content:center;z-index:200}
 #modal.open{display:flex}
-#modal-box{background:#1E293B;border:1px solid #334155;border-radius:16px;padding:28px;width:90%;max-width:680px;max-height:90vh;overflow-y:auto}
-/* responsive */
-@media(max-width:700px){.kpi-grid{grid-template-columns:1fr 1fr}.form-grid{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}.state-times{grid-template-columns:1fr 1fr}}
+#modal-box{background:#1E293B;border:1px solid #334155;border-radius:16px;padding:24px;width:90%;max-width:560px}
+@media(max-width:700px){.kpi-grid{grid-template-columns:1fr 1fr}.form-grid{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}}
+@media print{#hdr{display:none}#main{padding:0}body{background:#fff;color:#000}.card{border:1px solid #ccc;background:#fff}}
 </style>
 </head>
 <body>
 
-<!-- HEADER -->
 <div id="hdr">
   <div id="hdr-left">
-    <div id="logo">🏭</div>
-    <span style="font-weight:700;font-size:16px;letter-spacing:-.3px">ProducciónOps</span>
-    <div id="live-dot" class="pulse"></div>
-    <span id="conn-label" style="font-size:11px;color:#64748B;margin-left:4px">conectando…</span>
+    <span style="font-size:20px">🏭</span>
+    <span style="font-weight:700;font-size:16px">ProducciónOps</span>
+    <span id="conn-label" style="font-size:11px;color:#64748B">conectando…</span>
   </div>
   <div id="nav">
     <input type="file" id="excel-input" accept=".xlsx,.xls" style="display:none"/>
-    <button class="btn" onclick="document.getElementById('excel-input').click()" style="padding:6px 14px;font-size:12px;background:#064E3B;color:#6EE7B7;border:1px solid #065F46">📂 Subir Excel</button>
-    <button class="btn" onclick="confirmReset()" style="padding:6px 14px;font-size:12px;background:#7F1D1D;color:#FCA5A5;border:1px solid #991B1B" title="Borrar todas las órdenes">🗑️ Reset</button>
+    <button class="btn" onclick="document.getElementById('excel-input').click()" style="padding:6px 12px;font-size:12px;background:#064E3B;color:#6EE7B7">📂 Subir Excel</button>
+    <button class="btn" onclick="confirmReset()" style="padding:6px 12px;font-size:12px;background:#7F1D1D;color:#FCA5A5">🗑️ Reset</button>
     <button class="nav-btn active" id="nav-dashboard" onclick="setView('dashboard')">📊 Dashboard</button>
-    <button class="nav-btn" id="nav-maquinas"  onclick="setView('maquinas')">🖥️ Por Máquina</button>
-    <button class="nav-btn" id="nav-ordenes"   onclick="setView('ordenes')">📋 Órdenes</button>
-    <button class="nav-btn" id="nav-nueva"     onclick="setView('nueva')">＋ Nueva Orden</button>
-    <button class="nav-btn" id="nav-reporte"   onclick="setView('reporte')">📈 Reporte</button>
+    <button class="nav-btn" id="nav-maquinas" onclick="setView('maquinas')">🖥️ Por Máquina</button>
+    <button class="nav-btn" id="nav-ordenes" onclick="setView('ordenes')">📋 Órdenes</button>
+    <button class="nav-btn" id="nav-nueva" onclick="setView('nueva')">＋ Nueva Orden</button>
+    <button class="nav-btn" id="nav-reporte" onclick="setView('reporte')">📈 Reporte</button>
   </div>
 </div>
 
-<!-- STATUS BAR -->
-<div id="status-bar"></div>
+<div id="status-bar" style="display:none;padding:6px 24px;font-size:12px"></div>
 
-<!-- MAIN -->
 <div id="main">
-  <div id="view-dashboard" class="fade-in"></div>
-  <div id="view-maquinas"  class="fade-in" style="display:none"></div>
-  <div id="view-ordenes"   class="fade-in" style="display:none"></div>
-  <div id="view-nueva"     class="fade-in" style="display:none"></div>
-  <div id="view-detalle"   class="fade-in" style="display:none"></div>
-  <div id="view-reporte"   class="fade-in" style="display:none"></div>
+  <div id="view-dashboard"></div>
+  <div id="view-maquinas" style="display:none"></div>
+  <div id="view-ordenes" style="display:none"></div>
+  <div id="view-nueva" style="display:none"></div>
+  <div id="view-detalle" style="display:none"></div>
+  <div id="view-reporte" style="display:none"></div>
 </div>
 
-<!-- MODAL (ajuste) -->
 <div id="modal">
   <div id="modal-box">
-    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;color:#F1F5F9">📋 Registrar Novedad</h3>
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">📋 Registrar Novedad</h3>
     <div style="margin-bottom:12px">
-      <label class="lbl">Descripción de Novedad *</label>
-      <textarea id="aj-desc" class="inp" rows="3" placeholder="Describe la novedad presentada…"></textarea>
+      <label style="font-size:12px;color:#64748B;display:block;margin-bottom:6px">Descripción de Novedad *</label>
+      <textarea id="aj-desc" class="inp" rows="3" placeholder="Describe la novedad…"></textarea>
     </div>
     <div style="margin-bottom:12px">
-      <label class="lbl">Persona que Reporta</label>
-      <select id="aj-reporta" class="inp">
-        <option value="">— Seleccionar —</option>
-      </select>
+      <label style="font-size:12px;color:#64748B;display:block;margin-bottom:6px">Persona que Reporta</label>
+      <select id="aj-reporta" class="inp"><option value="">— Seleccionar —</option></select>
     </div>
     <div style="margin-bottom:20px">
-      <label class="lbl">Duración (minutos)</label>
+      <label style="font-size:12px;color:#64748B;display:block;margin-bottom:6px">Duración (minutos)</label>
       <input id="aj-dur" class="inp" type="number" placeholder="0"/>
     </div>
     <div style="display:flex;gap:10px">
-      <button class="btn" onclick="submitAjuste()" style="flex:1;padding:11px;background:#4C1D95;color:#fff;font-size:14px">💾 Guardar Novedad</button>
-      <button class="btn" onclick="closeModal()" style="padding:11px 18px;background:#0F172A;color:#94A3B8;border:1px solid #334155;font-size:13px">Cancelar</button>
+      <button class="btn" onclick="submitAjuste()" style="flex:1;padding:11px;background:#4C1D95;color:#fff">💾 Guardar Novedad</button>
+      <button class="btn" onclick="closeModal()" style="padding:11px 18px;background:#0F172A;color:#94A3B8;border:1px solid #334155">Cancelar</button>
     </div>
   </div>
 </div>
 
 <script>
-// ═══════════════════════════════════════════════
-// CONFIG
-// ═══════════════════════════════════════════════
-const MACHINES = ["Nilpeter 1","Nilpeter 2","Kromia"];
-const STATUS_CONFIG = {
-  setup:      {label:"Montaje",    color:"#F59E0B",dark:"#92400E",bg:"#FEF3C7",icon:"🔩"},
-  ajuste:     {label:"Ajuste",     color:"#8B5CF6",dark:"#4C1D95",bg:"#F5F3FF",icon:"🔧"},
-  produccion: {label:"Producción", color:"#3B82F6",dark:"#1D4ED8",bg:"#EFF6FF",icon:"🏭"},
-  finalizada: {label:"Finalizada", color:"#10B981",dark:"#064E3B",bg:"#ECFDF5",icon:"✅"},
+// ============ CONFIG ============
+var MACHINES = ["Nilpeter 1","Nilpeter 2","Kromia"];
+var OPERARIOS = ["ALONSO RIOS MANUEL RICARDO","ANAYA BASTIDAS WILMER","CHAGUALA YAIMA LEONEL ANDRES","CORTES PINZON ULISES","CUELLAR MORA ANDRES ANTONIO","DONCEL AVENDAÑO ERNESTO","LIZARAZO MONTOYA OSCAR JAVIER","MEDINA CORTES SANTIAGO ADOLFO","MOLINA CHITIVA JULIAN DAVID","MOYANO URREA HARLY YINNET","OSORIO MUÑOZ GLEIBER JOSE","RAMIREZ TORRES BETTY LISSETTE","SERRANO CARDENAS ANDRES FABIAN"];
+var REPORTANTES = ["ALVARADO CORREDOR JIMMY ALEJANDRO","BRICEÑO ARENAS LIZ ANYURY","DIAZ ORJUELA MARTHA NANCI"];
+var STATUS_KEYS = ["setup","ajuste","produccion","finalizada"];
+var STATUS_CFG = {
+  setup:      {label:"Montaje",    color:"#F59E0B", dark:"#92400E", bg:"#FEF3C7", icon:"🔩"},
+  ajuste:     {label:"Ajuste",     color:"#8B5CF6", dark:"#4C1D95", bg:"#F5F3FF", icon:"🔧"},
+  produccion: {label:"Producción", color:"#3B82F6", dark:"#1D4ED8", bg:"#EFF6FF", icon:"🏭"},
+  finalizada: {label:"Finalizada", color:"#10B981", dark:"#064E3B", bg:"#ECFDF5", icon:"✅"}
 };
-const STATUS_KEYS = ["setup","ajuste","produccion","finalizada"];
 
-const OPERARIOS = [
-  "ALONSO RIOS MANUEL RICARDO",
-  "ANAYA BASTIDAS WILMER",
-  "CHAGUALA YAIMA LEONEL ANDRES",
-  "CORTES PINZON ULISES",
-  "CUELLAR MORA ANDRES ANTONIO",
-  "DONCEL AVENDAÑO ERNESTO",
-  "LIZARAZO MONTOYA OSCAR JAVIER",
-  "MEDINA CORTES SANTIAGO ADOLFO",
-  "MOLINA CHITIVA JULIAN DAVID",
-  "MOYANO URREA HARLY YINNET",
-  "OSORIO MUÑOZ GLEIBER JOSE",
-  "RAMIREZ TORRES BETTY LISSETTE",
-  "SERRANO CARDENAS ANDRES FABIAN",
-];
+// ============ STATE ============
+var orders = [];
+var catalog = [];
+var curView = "dashboard";
+var detailId = null;
+var ajusteOid = null;
 
-const REPORTANTES = [
-  "ALVARADO CORREDOR JIMMY ALEJANDRO",
-  "BRICEÑO ARENAS LIZ ANYURY",
-  "DIAZ ORJUELA MARTHA NANCI",
-];
-
-function getTurno(isoDate) {
-  // T1: 06:00-14:00, T2: 14:00-22:00, T3: 22:00-06:00 — Colombia GMT-5
-  const d = new Date(isoDate);
-  const h = new Date(d.getTime() - 5*60*60*1000).getUTCHours();
-  if (h >= 6  && h < 14) return "T1 (06:00-14:00)";
-  if (h >= 14 && h < 22) return "T2 (14:00-22:00)";
-  return "T3 (22:00-06:00)";
+// ============ HELPERS ============
+function fmtTime(s){
+  if(!s && s!==0) return "—";
+  var h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60;
+  if(h>0) return h+"h "+m+"m "+sec+"s";
+  if(m>0) return m+"m "+sec+"s";
+  return sec+"s";
 }
-function getFechaCol(isoDate) {
-  if (!isoDate) return "—";
-  const d = new Date(new Date(isoDate).getTime() - 5*60*60*1000);
-  return d.toISOString().slice(0,10).split("-").reverse().join("/");
-}
-function calcETA(order) {
-  // ETA = hora_inicio_produccion + (metros / velocidad_mts_hr)
-  // velocidad en uds/hr, metros del pedido
-  const vel = Number(order.velocidadActual) || Number(order.velocidadObjetivo) || 0;
-  const metros = Number(order.metros) || 0;
-  if (vel <= 0 || metros <= 0 || order.status === "finalizada") return null;
-  // Find when produccion started
-  const histProd = (order.history||[]).filter(h=>h.status==="produccion");
-  const startProd = histProd.length > 0 ? new Date(histProd[0].at) : new Date();
-  // Time already in produccion (seconds)
-  const t = computeTimes(order);
-  const secsInProd = t.tProduccion || 0;
-  // Total seconds needed = metros / vel * 3600
-  const totalSecs = (metros / vel) * 3600;
-  const remaining = Math.max(0, totalSecs - secsInProd);
-  const eta = new Date(Date.now() + remaining * 1000);
-  // Convert to Colombia time
-  const etaCol = new Date(eta.getTime() - 5*60*60*1000);
-  const h = etaCol.getUTCHours().toString().padStart(2,"0");
-  const m = etaCol.getUTCMinutes().toString().padStart(2,"0");
-  const pct = totalSecs > 0 ? Math.min(100,(secsInProd/totalSecs)*100).toFixed(0) : 0;
-  return { hora: `${h}:${m}`, remaining: Math.floor(remaining/60), pct: Number(pct), totalMin: Math.round(totalSecs/60) };
-}
-function getFecha(isoDate) {
-  if (!isoDate) return "—";
-  return new Date(isoDate).toLocaleDateString("es-CO", {day:"2-digit",month:"2-digit",year:"numeric"});
-}
-
-// ═══════════════════════════════════════════════
-// STATE
-// ═══════════════════════════════════════════════
-let orders   = [];
-let catalog  = [];
-let curView  = "dashboard";
-let detailId = null;
-let ajusteOid = null;
-let tickInterval = null;
-
-// ═══════════════════════════════════════════════
-// SSE — real-time connection
-// ═══════════════════════════════════════════════
-async function loadOrders() {
-  try {
-    const r = await fetch("/api/orders");
-    const d = await r.json();
-    orders = d.orders || [];
-    renderCurrent();
-    setConnLabel(true);
-  } catch(e) {
-    setConnLabel(false);
-    setTimeout(loadOrders, 4000);
-  }
-}
-
-function connectSSE() {
-  // Primary: REST polling every 5 seconds (always works)
-  loadOrders();
-  setInterval(async () => {
-    try {
-      const r = await fetch("/api/orders");
-      const d = await r.json();
-      const newOrders = d.orders || [];
-      // Only re-render if data changed
-      if(JSON.stringify(newOrders) !== JSON.stringify(orders)) {
-        orders = newOrders;
-        renderCurrent();
-      }
-      setConnLabel(true);
-    } catch(e) {
-      setConnLabel(false);
-    }
-  }, 5000);
-
-  // Secondary: SSE for instant updates (bonus, not required)
-  try {
-    const es = new EventSource("/stream");
-    es.addEventListener("init",   e => { try { onData(JSON.parse(e.data)); } catch(err){} });
-    es.addEventListener("update", e => { try { onData(JSON.parse(e.data)); } catch(err){} });
-    es.onopen  = () => setConnLabel(true);
-    es.onerror = () => { es.close(); }; // SSE fails silently, REST polling takes over
-  } catch(e) {}
-}
-function setConnLabel(ok) {
-  document.getElementById("conn-label").textContent = ok ? "en vivo" : "reconectando…";
-  document.getElementById("conn-label").style.color  = ok ? "#10B981" : "#EF4444";
-  document.getElementById("live-dot").style.background = ok ? "#10B981" : "#EF4444";
-}
-function onData(data) {
-  orders = data.orders || [];
-  renderCurrent();
-  // If reporte is open, refresh it too (filters need fresh data)
-  if(curView==="reporte") renderReporte();
-}
-
-// ═══════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════
-function fmtTime(s) {
-  if (!s && s !== 0) return "—";
-  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
-  if(h>0) return `${h}h ${m}m ${sec}s`;
-  if(m>0) return `${m}m ${sec}s`;
-  return `${sec}s`;
-}
-function fmtDT(iso) {
-  if (!iso) return "—";
+function fmtDT(iso){
+  if(!iso) return "—";
   return new Date(iso).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
 }
-function velColor(p) { return p>=90?"#10B981":p>=70?"#F59E0B":"#EF4444"; }
-
-function computeTimes(order) {
-  const t={tSetup:0,tProduccion:0,tAjuste:0,tFinalizada:0};
-  const keyMap={setup:"tSetup",produccion:"tProduccion",ajuste:"tAjuste",finalizada:"tFinalizada"};
-  const hist=order.history||[];
-  // Stop at finalizadaAt if order is done — no live ticking
-  const isFinal = order.status==="finalizada";
-  const ceiling = isFinal && order.finalizadaAt ? new Date(order.finalizadaAt).getTime() : Date.now();
-  for(let i=0;i<hist.length;i++){
-    const start=new Date(hist[i].at).getTime();
-    const end=hist[i+1]?new Date(hist[i+1].at).getTime():ceiling;
-    const k=keyMap[hist[i].status];
+function velColor(p){ return p>=90 ? "#10B981" : (p>=70 ? "#F59E0B" : "#EF4444"); }
+function getTurno(isoDate){
+  var d=new Date(isoDate);
+  var h=new Date(d.getTime()-5*3600*1000).getUTCHours();
+  if(h>=6 && h<14) return "T1 (06:00-14:00)";
+  if(h>=14 && h<22) return "T2 (14:00-22:00)";
+  return "T3 (22:00-06:00)";
+}
+function getFechaCol(isoDate){
+  if(!isoDate) return "—";
+  var d=new Date(new Date(isoDate).getTime()-5*3600*1000);
+  return d.toISOString().slice(0,10).split("-").reverse().join("/");
+}
+function escHtml(s){
+  return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function computeTimes(order){
+  var t={tSetup:0,tAjuste:0,tProduccion:0,tFinalizada:0};
+  var keyMap={setup:"tSetup",ajuste:"tAjuste",produccion:"tProduccion",finalizada:"tFinalizada"};
+  var hist=order.history||[];
+  var isFinal=order.status==="finalizada";
+  var ceiling=(isFinal && order.finalizadaAt) ? new Date(order.finalizadaAt).getTime() : Date.now();
+  for(var i=0;i<hist.length;i++){
+    var start=new Date(hist[i].at).getTime();
+    var end=hist[i+1] ? new Date(hist[i+1].at).getTime() : ceiling;
+    var k=keyMap[hist[i].status];
     if(k) t[k]+=Math.floor((end-start)/1000);
   }
   return t;
 }
-
-function getAcciones(o) {
-  const acc=[];
-  const vp=Number(o.velocidadObjetivo)>0?(Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100:0;
-  // pausada estado removed
-  if(vp>0&&vp<70)  acc.push({tipo:"critica",msg:`🔴 Velocidad baja (${vp.toFixed(0)}%) — revisar proceso`});
-  else if(vp>0&&vp<90) acc.push({tipo:"advertencia",msg:`🟡 Velocidad al ${vp.toFixed(0)}% — optimizar`});
-  const tSetup=(computeTimes(o).tSetup||0);
-  if(tSetup>1800) acc.push({tipo:"advertencia",msg:`⏱️ Montaje prolongado (${Math.floor(tSetup/60)} min) — analizar causa`});
-  if((o.ajustes?.length||0)>=3) acc.push({tipo:"critica",msg:`🔧 ${o.ajustes.length} ajustes — revisar estabilidad`});
-  if(acc.length===0&&o.status!=="finalizada") acc.push({tipo:"ok",msg:"✅ Ejecución dentro de parámetros"});
+function getAcciones(o){
+  var acc=[];
+  var vp = Number(o.velocidadObjetivo)>0 ? (Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100 : 0;
+  if(vp>0 && vp<70) acc.push({tipo:"critica",msg:"🔴 Velocidad baja ("+vp.toFixed(0)+"%) — revisar proceso"});
+  else if(vp>0 && vp<90) acc.push({tipo:"advertencia",msg:"🟡 Velocidad al "+vp.toFixed(0)+"% — optimizar"});
+  var tSetup = computeTimes(o).tSetup||0;
+  if(tSetup>1800) acc.push({tipo:"advertencia",msg:"⏱️ Montaje prolongado ("+Math.floor(tSetup/60)+" min) — analizar causa"});
+  if((o.ajustes||[]).length>=3) acc.push({tipo:"critica",msg:"🔧 "+o.ajustes.length+" novedades — revisar estabilidad"});
+  if(acc.length===0 && o.status!=="finalizada") acc.push({tipo:"ok",msg:"✅ Ejecución dentro de parámetros"});
   return acc;
 }
-
-function badge(status){
-  const c=STATUS_CONFIG[status]||STATUS_CONFIG.setup;
-  return `<span class="badge" style="background:${c.bg};color:${c.color}">${c.icon} ${c.label}</span>`;
-}
-
-// ═══════════════════════════════════════════════
-// VIEW ROUTER
-// ═══════════════════════════════════════════════
-function setView(v, oid) {
-  curView=v;
-  if(oid) detailId=oid;
-  ["dashboard","maquinas","ordenes","nueva","detalle"].forEach(x=>{
-    document.getElementById("view-"+x).style.display = x===v?"block":"none";
-  });
-  ["dashboard","maquinas","ordenes","nueva","reporte"].forEach(x=>{
-    const b=document.getElementById("nav-"+x);
-    if(b) b.classList.toggle("active", x===v);
-  });
-  // Always render on explicit navigation; ticker skips "nueva" to protect form inputs
-  if(v==="nueva") renderNueva();
-  else if(v==="reporte") { 
-    // Small delay to ensure orders are loaded from SSE
-    setTimeout(renderReporte, 100); 
+function accionesHtml(acc){
+  var html="";
+  for(var i=0;i<acc.length;i++){
+    var a=acc[i];
+    var bg = a.tipo==="critica" ? "#7F1D1D30" : (a.tipo==="advertencia" ? "#78350F30" : "#052E1630");
+    var col = a.tipo==="critica" ? "#FCA5A5" : (a.tipo==="advertencia" ? "#FCD34D" : "#6EE7B7");
+    var bd = a.tipo==="critica" ? "#7F1D1D" : (a.tipo==="advertencia" ? "#78350F" : "#052E16");
+    html += '<div style="font-size:11px;padding:6px 9px;border-radius:6px;margin-bottom:4px;background:'+bg+';color:'+col+';border:1px solid '+bd+'">'+a.msg+'</div>';
   }
-  else renderCurrent();
+  return html;
 }
-function renderCurrent() {
-  if(curView==="dashboard") renderDashboard();
-  else if(curView==="maquinas")  renderMaquinas();
-  else if(curView==="ordenes")   renderOrdenes();
-  else if(curView==="nueva")     { /* no re-render on tick */ }
-  else if(curView==="detalle") {
-    const velEl=document.getElementById("vel-inp");
+function badgeHtml(status){
+  var c = STATUS_CFG[status] || STATUS_CFG.setup;
+  return '<span class="badge" style="background:'+c.bg+';color:'+c.color+'">'+c.icon+' '+c.label+'</span>';
+}
+function calcETA(order){
+  var vel = Number(order.velocidadActual) || Number(order.velocidadObjetivo) || 0;
+  var metros = Number(order.metros) || 0;
+  if(vel<=0 || metros<=0 || order.status==="finalizada") return null;
+  var t = computeTimes(order);
+  var secsInProd = t.tProduccion || 0;
+  var totalSecs = (metros/vel)*3600;
+  var remaining = Math.max(0, totalSecs - secsInProd);
+  var eta = new Date(Date.now() + remaining*1000);
+  var etaCol = new Date(eta.getTime() - 5*3600*1000);
+  var hh = String(etaCol.getUTCHours()).padStart(2,"0");
+  var mm = String(etaCol.getUTCMinutes()).padStart(2,"0");
+  var pct = totalSecs>0 ? Math.min(100,(secsInProd/totalSecs)*100) : 0;
+  return {hora:hh+":"+mm, remaining:Math.floor(remaining/60), pct:Math.round(pct), totalMin:Math.round(totalSecs/60)};
+}
+
+// ============ VIEW ROUTER ============
+function setView(v, oid){
+  curView = v;
+  if(oid) detailId = oid;
+  var views = ["dashboard","maquinas","ordenes","nueva","detalle","reporte"];
+  for(var i=0;i<views.length;i++){
+    var el = document.getElementById("view-"+views[i]);
+    if(el) el.style.display = (views[i]===v) ? "block" : "none";
+  }
+  var navs = ["dashboard","maquinas","ordenes","nueva","reporte"];
+  for(var j=0;j<navs.length;j++){
+    var b = document.getElementById("nav-"+navs[j]);
+    if(b) b.classList.toggle("active", navs[j]===v);
+  }
+  // Explicit navigation always renders, even "nueva"
+  if(v==="nueva") renderNueva();
+  else renderView(v);
+}
+function renderView(v){
+  if(v==="dashboard") renderDashboard();
+  else if(v==="maquinas") renderMaquinas();
+  else if(v==="ordenes") renderOrdenes();
+  else if(v==="nueva") { /* ticker skips nueva to protect form inputs */ }
+  else if(v==="detalle") {
+    var velEl = document.getElementById("vel-inp");
     if(velEl && document.activeElement===velEl) return;
     renderDetalle();
   }
-  else if(curView==="reporte") renderReporte();
+  else if(v==="reporte") renderReporte();
 }
 
-// ═══════════════════════════════════════════════
-// LIVE TICK — re-render every second for timers
-// ═══════════════════════════════════════════════
-function startTick() {
-  if(tickInterval) clearInterval(tickInterval);
-  tickInterval=setInterval(()=>{ renderCurrent(); },1000);
-}
+// ============ DASHBOARD ============
+function renderDashboard(){
+  var el = document.getElementById("view-dashboard");
+  if(!el) return;
+  var active = [];
+  var finalizadas = 0, enProd = 0, criticas = 0;
+  var velSum = 0, velCount = 0;
+  for(var i=0;i<orders.length;i++){
+    var o = orders[i];
+    if(o.status==="finalizada") finalizadas++; else active.push(o);
+    if(o.status==="produccion") enProd++;
+    var acc = getAcciones(o);
+    for(var j=0;j<acc.length;j++){ if(acc[j].tipo==="critica"){ criticas++; break; } }
+    if(Number(o.velocidadObjetivo)>0){ velSum += (Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100; velCount++; }
+  }
+  var avgVel = velCount>0 ? velSum/velCount : 0;
 
-// ═══════════════════════════════════════════════
-// DASHBOARD
-// ═══════════════════════════════════════════════
-function renderDashboard() {
-  const active    = orders.filter(o=>o.status!=="finalizada").length;
-  const finaliz   = orders.filter(o=>o.status==="finalizada").length;
-  const enProd    = orders.filter(o=>o.status==="produccion").length;
-  const criticas  = orders.filter(o=>getAcciones(o).some(a=>a.tipo==="critica")).length;
-  const withVel   = orders.filter(o=>Number(o.velocidadObjetivo)>0);
-  const avgVel    = withVel.length>0
-    ? withVel.reduce((s,o)=>s+(Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100,0)/withVel.length : 0;
-
-  const kpis=[
-    {label:"Órdenes Activas",  val:active,           icon:"📋",color:"#3B82F6",    sub:`${finaliz} finalizadas`},
-    {label:"En Producción",    val:enProd,            icon:"🏭",color:"#10B981",    sub:"corriendo ahora"},
-    {label:"Eficiencia Prom.", val:`${avgVel.toFixed(0)}%`,icon:"⚡",color:velColor(Math.min(avgVel,100)),sub:"(Vel.Real÷Vel.Obj)×100"},
-    {label:"Alertas Críticas", val:criticas,          icon:"🚨",color:criticas>0?"#EF4444":"#10B981",sub:criticas>0?"requieren atención":"sin alertas"},
+  var parts = [];
+  parts.push('<div class="kpi-grid">');
+  var kpis = [
+    {l:"Órdenes Activas", v:active.length, ic:"📋", c:"#3B82F6", s:finalizadas+" finalizadas"},
+    {l:"En Producción", v:enProd, ic:"🏭", c:"#10B981", s:"corriendo ahora"},
+    {l:"Eficiencia Prom.", v:avgVel.toFixed(0)+"%", ic:"⚡", c:velColor(Math.min(avgVel,100)), s:"(Vel.Real÷Vel.Obj)×100"},
+    {l:"Alertas Críticas", v:criticas, ic:"🚨", c:(criticas>0?"#EF4444":"#10B981"), s:(criticas>0?"requieren atención":"sin alertas")}
   ];
-
-  let html=`<div class="kpi-grid">`;
-  kpis.forEach(k=>{
-    html+=`<div class="card kpi"><div style="display:flex;justify-content:space-between;align-items:flex-start">
-      <div><div class="kpi-label">${k.label}</div>
-      <div class="kpi-val" style="color:${k.color}">${k.val}</div>
-      <div class="kpi-sub">${k.sub}</div></div>
-      <span class="kpi-icon">${k.icon}</span></div></div>`;
-  });
-  html+=`</div>`;
-
-  const activeOrds=orders.filter(o=>o.status!=="finalizada");
-  if(activeOrds.length===0){
-    html+=`<div class="card empty-state"><div style="font-size:48px;margin-bottom:16px">🏭</div>
-      <div style="font-size:18px;font-weight:600;color:#94A3B8;margin-bottom:8px">Sin órdenes de producción</div>
-      <div style="color:#475569;margin-bottom:24px">Crea la primera orden o sube el catálogo Excel</div>
-      <button class="btn" onclick="setView('nueva')" style="padding:10px 24px;background:#3B82F6;color:#fff;font-size:14px">＋ Nueva Orden</button></div>`;
-  } else {
-    html+=`<div class="orders-grid">`;
-    orders.filter(o=>o.status!=="finalizada").forEach(order=>{
-      const t=computeTimes(order);
-      const vp=Number(order.velocidadObjetivo)>0?Math.min((Number(order.velocidadActual)/Number(order.velocidadObjetivo))*100,100):0;
-      // Velocity display for card
-      const velObj=Number(order.velocidadObjetivo)||0;
-      const velReal=Number(order.velocidadActual)||0;
-      const velPctFull=velObj>0?((velReal/velObj)*100):0;
-      const velRowHtml=velObj>0?('<div style="background:#0F172A;border-radius:8px;padding:8px 12px;margin-bottom:10px;border:1px solid #1E293B">'+
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'+
-          '<span style="font-size:10px;color:#64748B;font-weight:600">⚡ VELOCIDAD</span>'+
-          '<span style="font-size:11px;font-weight:700;font-family:JetBrains Mono,monospace;color:'+velColor(velPctFull)+'">'+velPctFull.toFixed(0)+'%</span>'+
-        '</div>'+
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">'+
-          '<div style="flex:1;text-align:center;background:#1E293B;border-radius:6px;padding:5px">'+
-            '<div style="font-size:9px;color:#64748B">Real</div>'+
-            '<div style="font-size:20px;font-weight:700;color:'+velColor(velPctFull)+';font-family:JetBrains Mono,monospace">'+velReal+'</div>'+
-            '<div style="font-size:9px;color:#475569">uds/hr</div>'+
-          '</div>'+
-          '<div style="color:#475569;font-size:11px">vs</div>'+
-          '<div style="flex:1;text-align:center;background:#1E293B;border-radius:6px;padding:5px">'+
-            '<div style="font-size:9px;color:#64748B">Objetivo</div>'+
-            '<div style="font-size:20px;font-weight:700;color:#64748B;font-family:JetBrains Mono,monospace">'+velObj+'</div>'+
-            '<div style="font-size:9px;color:#475569">uds/hr</div>'+
-          '</div>'+
-        '</div>'+
-        '<div style="background:#1E293B;border-radius:4px;height:5px;overflow:hidden">'+
-          '<div style="width:'+Math.min(velPctFull,100)+'%;background:'+velColor(velPctFull)+';height:100%;border-radius:4px"></div>'+
-        '</div></div>'):'';
-      const vc=velColor(vp);
-      const acc=getAcciones(order);
-      const cfg=STATUS_CONFIG[order.status]||STATUS_CONFIG.setup;
-      const circ=2*Math.PI*28;
-      const offset=circ-(vp/100)*circ;
-      const isAlert=acc.some(a=>a.tipo==="critica");
-
-      const timeRows=STATUS_KEYS.map(k=>{
-        const tc=STATUS_CONFIG[k];
-        return `<div style="background:#0F172A;border-radius:7px;padding:6px 8px;border:1px solid ${order.status===k?tc.color+"80":"#0F172A"}">
-          <div style="font-size:9px;color:#64748B">${tc.icon} ${tc.label}</div>
-          <div style="font-size:12px;font-weight:600;font-family:'JetBrains Mono',monospace;color:${tc.color};margin-top:2px">${fmtTime(t["t"+k.charAt(0).toUpperCase()+k.slice(1)])}</div>
-        </div>`;
-      }).join("");
-
-      const accHtml=acc.map(a=>`<div class="accion ${a.tipo}">${a.msg}</div>`).join("");
-
-      const btns=STATUS_KEYS.filter(k=>k!==order.status).map(k=>{
-        const sc=STATUS_CONFIG[k];
-        return '<button class="btn" onclick="patchStatus(''+order.id+'',''+k+'')" style="padding:4px 10px;font-size:11px;background:'+sc.dark+';color:#fff">'+sc.icon+'</button>';
-      }).join("");
-
-      html+=`<div class="card order-card ${isAlert?"alert":""}" style="border-color:${isAlert?"#EF444440":"#334155"}">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
-          <div>
-            <div style="font-size:11px;color:#64748B;font-family:'JetBrains Mono',monospace">${order.ordenId}</div>
-            <div style="font-size:16px;font-weight:700;color:#F1F5F9;margin-top:2px">${order.producto}</div>
-            ${order.maquina?`<div style="font-size:11px;color:#8B5CF6;margin-top:3px">🖥️ ${order.maquina}</div>`:""}
-            ${order.cliente?`<div style="font-size:11px;color:#64748B;margin-top:1px">👤 ${order.cliente}</div>`:""}
-            ${order.operario?`<div style="font-size:11px;color:#10B981;margin-top:1px">👷 ${order.operario}</div>`:""}
-            ${order.turno?`<div style="font-size:10px;color:#475569;margin-top:1px">🕐 ${order.turno}</div>`:""}
-          </div>${badge(order.status)}</div>
-        <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
-          <svg width="68" height="68" viewBox="0 0 72 72" style="flex-shrink:0">
-            <circle cx="36" cy="36" r="28" fill="none" stroke="#1E293B" stroke-width="6"/>
-            <circle cx="36" cy="36" r="28" fill="none" stroke="${vc}" stroke-width="6"
-              stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}"
-              stroke-linecap="round" transform="rotate(-90 36 36)" style="transition:stroke-dashoffset .6s"/>
-            <text x="36" y="40" text-anchor="middle" fill="${vc}" font-size="12" font-weight="700" font-family="JetBrains Mono,monospace">${vp.toFixed(0)}%</text>
-          </svg>
-          <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px">${timeRows}</div>
-        </div>
-        ${velRowHtml}
-        <div style="margin-bottom:12px">${accHtml}</div>
-        <div style="display:flex;gap:5px;flex-wrap:wrap">
-          ${btns}
-          <button class="btn" onclick="setView('detalle','${order.id}')" style="padding:4px 10px;font-size:11px;background:#1E293B;color:#94A3B8;border:1px solid #334155;margin-left:auto">Ver →</button>
-        </div>
-      </div>`;
-    });
-    html+=`</div>`;
+  for(var k=0;k<kpis.length;k++){
+    var kp=kpis[k];
+    parts.push('<div class="card" style="padding:20px"><div style="display:flex;justify-content:space-between"><div><div style="font-size:12px;color:#64748B;margin-bottom:6px">'+kp.l+'</div><div style="font-size:32px;font-weight:700;color:'+kp.c+';font-family:monospace">'+kp.v+'</div><div style="font-size:11px;color:#475569;margin-top:6px">'+kp.s+'</div></div><span style="font-size:28px">'+kp.ic+'</span></div></div>');
   }
-  document.getElementById("view-dashboard").innerHTML=html;
-}
+  parts.push('</div>');
 
-// ═══════════════════════════════════════════════
-// POR MÁQUINA
-// ═══════════════════════════════════════════════
-function renderMaquinas() {
-  let html=`<h2 style="font-size:20px;font-weight:700;margin-bottom:20px">🖥️ Tablero por Máquina</h2>
-    <div class="maq-grid">`;
-
-  MACHINES.forEach(m=>{
-    const mos=orders.filter(o=>o.maquina===m);
-    const times=mos.reduce((acc,o)=>{
-      const t=computeTimes(o);
-      Object.keys(t).forEach(k=>{ acc[k]=(acc[k]||0)+t[k]; });
-      return acc;
-    },{});
-    const total=Object.values(times).reduce((a,b)=>a+b,0)||1;
-    const withVel=mos.filter(o=>Number(o.velocidadObjetivo)>0);
-    const ef=withVel.length>0
-      ? withVel.reduce((s,o)=>s+(Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100,0)/withVel.length : null;
-    const active=mos.filter(o=>o.status!=="finalizada").length;
-
-    const stateRows=STATUS_KEYS.map(k=>{
-      const tc=STATUS_CONFIG[k];
-      const tKey="t"+k.charAt(0).toUpperCase()+k.slice(1);
-      const secs=times[tKey]||0;
-      const pct=((secs/total)*100);
-      return `<div style="background:#0F172A;border-radius:8px;padding:10px 12px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-          <span style="font-size:11px;color:${tc.color};font-weight:600">${tc.icon} ${tc.label}</span>
-          <span style="font-size:11px;color:#64748B">${pct.toFixed(0)}%</span>
-        </div>
-        <div style="background:#1E293B;border-radius:4px;height:6px;overflow:hidden;margin-bottom:4px">
-          <div style="width:${pct}%;background:${tc.color};height:100%;border-radius:4px;transition:width .4s"></div>
-        </div>
-        <div style="font-size:13px;font-weight:700;color:${tc.color};font-family:'JetBrains Mono',monospace">${fmtTime(secs)}</div>
-      </div>`;
-    }).join("");
-
-    const orderRows=mos.map(o=>{
-      const cfg=STATUS_CONFIG[o.status]||STATUS_CONFIG.setup;
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#0F172A;border-radius:8px;margin-bottom:6px;cursor:pointer"
-          onclick="setView('detalle','${o.id}')">
-        <div>
-          <span style="font-size:12px;font-family:'JetBrains Mono',monospace;color:#94A3B8">${o.ordenId} </span>
-          <span style="font-size:13px;font-weight:600;color:#E2E8F0">${o.producto}</span>
-        </div>
-        ${badge(o.status)}
-      </div>`;
-    }).join("");
-
-    html+=`<div class="card" style="padding:24px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
-        <div>
-          <div style="font-size:18px;font-weight:700;color:#F1F5F9">${m}</div>
-          <div style="font-size:12px;color:#64748B;margin-top:2px">${mos.length} órdenes · ${active} activas</div>
-        </div>
-        ${ef!==null?`<div style="text-align:center">
-          <div style="font-size:26px;font-weight:700;color:${velColor(ef)};font-family:'JetBrains Mono',monospace">${ef.toFixed(0)}%</div>
-          <div style="font-size:10px;color:#64748B">eficiencia</div>
-        </div>`:""}
-      </div>
-      <div style="font-size:11px;color:#64748B;margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Tiempo acumulado por estado</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">${stateRows}</div>
-      ${mos.length>0?`<div style="font-size:11px;color:#64748B;margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Órdenes</div>${orderRows}`
-        :`<div style="font-size:13px;color:#475569;text-align:center;padding:16px">Sin órdenes asignadas</div>`}
-    </div>`;
-  });
-
-  html+=`</div>`;
-  document.getElementById("view-maquinas").innerHTML=html;
-}
-
-// ═══════════════════════════════════════════════
-// TABLA ÓRDENES
-// ═══════════════════════════════════════════════
-function renderOrdenes() {
-  let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-    <h2 style="font-size:20px;font-weight:700">📋 Todas las Órdenes</h2>
-    <button class="btn" onclick="setView('nueva')" style="padding:8px 20px;background:#3B82F6;color:#fff;font-size:13px">＋ Nueva</button>
-  </div>`;
-
-  const activeOrds=orders.filter(o=>o.status!=="finalizada");
-  if(activeOrds.length===0){
-    html+=`<div class="card" style="padding:40px;text-align:center;color:#475569">Sin órdenes registradas</div>`;
+  if(active.length===0){
+    parts.push('<div class="card" style="padding:60px;text-align:center"><div style="font-size:48px;margin-bottom:16px">🏭</div><div style="font-size:18px;font-weight:600;color:#94A3B8;margin-bottom:8px">Sin órdenes de producción</div><div style="color:#475569;margin-bottom:24px">Crea la primera orden o sube el catálogo Excel</div><button class="btn" onclick="setView(\'nueva\')" style="padding:10px 24px;background:#3B82F6;color:#fff;font-size:14px">＋ Nueva Orden</button></div>');
   } else {
-    html+=`<div class="card" style="overflow:auto"><table class="tbl">
-      <thead><tr>${["Orden","Producto","Máquina","Estado","Montaje","Ajuste","Producción","Finalizada","Efic.",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
-      <tbody>`;
-    orders.forEach((o,i)=>{
-      const t=computeTimes(o);
-      const vp=Number(o.velocidadObjetivo)>0?(Number(o.velocidadActual)/Number(o.velocidadObjetivo)*100).toFixed(0):"—";
-      html+=`<tr>
-        <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8">${o.ordenId}</td>
-        <td style="font-weight:600;color:#E2E8F0">${o.producto}</td>
-        <td style="color:#8B5CF6;font-size:11px">${o.maquina||"—"}</td>
-        <td>${badge(o.status)}</td>
-        <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;font-size:11px">${fmtTime(t.tSetup)}</td>
-        <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;font-size:11px">${fmtTime(t.tAjuste)}</td>
-        <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;font-size:11px">${fmtTime(t.tProduccion)}</td>
-        <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;font-size:11px">${fmtTime(t.tFinalizada)}</td>
-        <td>${vp!=="—"?`<span style="color:${velColor(Number(vp))};font-weight:700">${vp}%</span>`:"—"}</td>
-        <td><button class="btn" onclick="setView('detalle','${o.id}')" style="padding:4px 10px;font-size:11px;background:#1E293B;color:#94A3B8;border:1px solid #334155">Ver →</button></td>
-      </tr>`;
-    });
-    html+=`</tbody></table></div>`;
+    parts.push('<div class="orders-grid">');
+    for(var oi=0;oi<active.length;oi++){
+      var ord = active[oi];
+      var t = computeTimes(ord);
+      var velObj = Number(ord.velocidadObjetivo)||0;
+      var velReal = Number(ord.velocidadActual)||0;
+      var velPct = velObj>0 ? (velReal/velObj)*100 : 0;
+      var vc = velColor(velPct);
+      var acc = getAcciones(ord);
+      var hasCritica = false;
+      for(var ai=0;ai<acc.length;ai++){ if(acc[ai].tipo==="critica") hasCritica=true; }
+      var cfg = STATUS_CFG[ord.status] || STATUS_CFG.setup;
+      var circ = 2*Math.PI*28;
+      var ringPct = Math.min(velPct,100);
+      var offset = circ - (ringPct/100)*circ;
+
+      var timeBoxes = "";
+      for(var sk=0;sk<STATUS_KEYS.length;sk++){
+        var key = STATUS_KEYS[sk];
+        var tc = STATUS_CFG[key];
+        var tKey = "t"+key.charAt(0).toUpperCase()+key.slice(1);
+        timeBoxes += '<div style="background:#0F172A;border-radius:7px;padding:6px 8px;border:1px solid '+(ord.status===key?tc.color+"80":"#0F172A")+'"><div style="font-size:9px;color:#64748B">'+tc.icon+' '+tc.label+'</div><div style="font-size:12px;font-weight:600;font-family:monospace;color:'+tc.color+';margin-top:2px">'+fmtTime(t[tKey])+'</div></div>';
+      }
+
+      var velBlock = "";
+      if(velObj>0){
+        velBlock = '<div style="background:#0F172A;border-radius:8px;padding:8px 12px;margin-bottom:10px;border:1px solid #1E293B">'+
+          '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:10px;color:#64748B;font-weight:600">⚡ VELOCIDAD</span><span style="font-size:11px;font-weight:700;font-family:monospace;color:'+vc+'">'+velPct.toFixed(0)+'%</span></div>'+
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">'+
+            '<div style="flex:1;text-align:center;background:#1E293B;border-radius:6px;padding:5px"><div style="font-size:9px;color:#64748B">Real</div><div style="font-size:20px;font-weight:700;color:'+vc+';font-family:monospace">'+velReal+'</div><div style="font-size:9px;color:#475569">uds/hr</div></div>'+
+            '<div style="color:#475569;font-size:11px">vs</div>'+
+            '<div style="flex:1;text-align:center;background:#1E293B;border-radius:6px;padding:5px"><div style="font-size:9px;color:#64748B">Objetivo</div><div style="font-size:20px;font-weight:700;color:#64748B;font-family:monospace">'+velObj+'</div><div style="font-size:9px;color:#475569">uds/hr</div></div>'+
+          '</div>'+
+          '<div style="background:#1E293B;border-radius:4px;height:5px;overflow:hidden"><div style="width:'+Math.min(velPct,100)+'%;background:'+vc+';height:100%;border-radius:4px"></div></div>'+
+        '</div>';
+      }
+
+      var etaBlock = "";
+      var eta = calcETA(ord);
+      if(eta){
+        var ringC = 2*Math.PI*18;
+        etaBlock = '<div style="background:#0F172A;border-radius:8px;padding:8px 12px;margin-bottom:10px;border:1px solid #1E293B;display:flex;justify-content:space-between;align-items:center">'+
+          '<div><div style="font-size:10px;color:#64748B">⏰ Hora estimada fin</div><div style="font-size:16px;font-weight:700;color:#10B981;font-family:monospace">'+eta.hora+'</div><div style="font-size:10px;color:#64748B">'+eta.remaining+' min restantes · '+eta.pct+'% avance</div></div>'+
+          '<svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="none" stroke="#1E293B" stroke-width="4"/><circle cx="22" cy="22" r="18" fill="none" stroke="#10B981" stroke-width="4" stroke-dasharray="'+ringC.toFixed(1)+'" stroke-dashoffset="'+(ringC*(1-eta.pct/100)).toFixed(1)+'" stroke-linecap="round" transform="rotate(-90 22 22)"/><text x="22" y="26" text-anchor="middle" fill="#10B981" font-size="9" font-weight="700">'+eta.pct+'%</text></svg>'+
+        '</div>';
+      }
+
+      var btns = "";
+      for(var bk=0;bk<STATUS_KEYS.length;bk++){
+        var bkey=STATUS_KEYS[bk];
+        if(bkey===ord.status) continue;
+        var bc=STATUS_CFG[bkey];
+        btns += '<button class="btn" onclick="patchStatus(\''+ord.id+'\',\''+bkey+'\')" style="padding:4px 10px;font-size:11px;background:'+bc.dark+';color:#fff">'+bc.icon+'</button>';
+      }
+
+      parts.push('<div class="card" style="padding:20px;border-color:'+(hasCritica?"#EF444440":"#334155")+'">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">'+
+          '<div><div style="font-size:11px;color:#64748B;font-family:monospace">'+escHtml(ord.ordenId)+'</div>'+
+          '<div style="font-size:16px;font-weight:700;color:#F1F5F9;margin-top:2px">'+escHtml(ord.producto)+'</div>'+
+          (ord.maquina?'<div style="font-size:11px;color:#8B5CF6;margin-top:3px">🖥️ '+escHtml(ord.maquina)+'</div>':'')+
+          (ord.operario?'<div style="font-size:11px;color:#10B981;margin-top:1px">👷 '+escHtml(ord.operario)+'</div>':'')+
+          (ord.cliente?'<div style="font-size:11px;color:#64748B;margin-top:1px">👤 '+escHtml(ord.cliente)+'</div>':'')+
+          (ord.turno?'<div style="font-size:10px;color:#475569;margin-top:1px">🕐 '+ord.turno+'</div>':'')+
+          '</div>'+badgeHtml(ord.status)+
+        '</div>'+
+        '<div style="display:flex;align-items:center;gap:16px;margin-bottom:14px">'+
+          '<svg width="68" height="68" viewBox="0 0 72 72" style="flex-shrink:0"><circle cx="36" cy="36" r="28" fill="none" stroke="#1E293B" stroke-width="6"/><circle cx="36" cy="36" r="28" fill="none" stroke="'+vc+'" stroke-width="6" stroke-dasharray="'+circ.toFixed(1)+'" stroke-dashoffset="'+offset.toFixed(1)+'" stroke-linecap="round" transform="rotate(-90 36 36)"/><text x="36" y="40" text-anchor="middle" fill="'+vc+'" font-size="12" font-weight="700" font-family="monospace">'+velPct.toFixed(0)+'%</text></svg>'+
+          '<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px">'+timeBoxes+'</div>'+
+        '</div>'+
+        velBlock + etaBlock +
+        '<div style="margin-bottom:12px">'+accionesHtml(acc)+'</div>'+
+        '<div style="display:flex;gap:5px;flex-wrap:wrap">'+btns+
+          '<button class="btn" onclick="setView(\'detalle\',\''+ord.id+'\')" style="padding:4px 10px;font-size:11px;background:#1E293B;color:#94A3B8;border:1px solid #334155;margin-left:auto">Ver →</button>'+
+        '</div>'+
+      '</div>');
+    }
+    parts.push('</div>');
   }
-  document.getElementById("view-ordenes").innerHTML=html;
+  el.innerHTML = parts.join("");
 }
 
-// ═══════════════════════════════════════════════
-// NUEVA ORDEN
-// ═══════════════════════════════════════════════
-function renderNueva() {
-  const catInfo=catalog.length>0
-    ?`<div style="background:#052E16;border:1px solid #065F46;border-radius:10px;padding:10px 16px;margin-bottom:16px;font-size:12px;color:#6EE7B7">
-        📂 Catálogo activo: <strong>${catalog.length}</strong> órdenes · Escribe el # y el sistema autocompletará los datos
-      </div>`:
-    `<div style="background:#1E293B;border:1px solid #334155;border-radius:10px;padding:10px 16px;margin-bottom:16px;font-size:12px;color:#64748B">
-        💡 Sube un Excel con tu catálogo de órdenes para autocompletado automático
-      </div>`;
+// ============ POR MAQUINA ============
+function renderMaquinas(){
+  var el = document.getElementById("view-maquinas");
+  if(!el) return;
+  var parts = ['<h2 style="font-size:20px;font-weight:700;margin-bottom:20px">🖥️ Tablero por Máquina</h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:20px">'];
 
-  const statusOpts=["setup","ajuste","produccion","finalizada"].map(k=>{
-    const c=STATUS_CONFIG[k];
-    return `<option value="${k}">${c.icon} ${c.label}</option>`;
-  }).join("");
+  for(var mi=0;mi<MACHINES.length;mi++){
+    var m = MACHINES[mi];
+    var mos = [];
+    for(var i=0;i<orders.length;i++){ if(orders[i].maquina===m) mos.push(orders[i]); }
+    var times = {tSetup:0,tAjuste:0,tProduccion:0,tFinalizada:0};
+    var velSum=0, velCount=0, activeCount=0;
+    for(var j=0;j<mos.length;j++){
+      var t=computeTimes(mos[j]);
+      times.tSetup+=t.tSetup; times.tAjuste+=t.tAjuste; times.tProduccion+=t.tProduccion; times.tFinalizada+=t.tFinalizada;
+      if(mos[j].status!=="finalizada") activeCount++;
+      if(Number(mos[j].velocidadObjetivo)>0){ velSum+=(Number(mos[j].velocidadActual)/Number(mos[j].velocidadObjetivo))*100; velCount++; }
+    }
+    var total = times.tSetup+times.tAjuste+times.tProduccion+times.tFinalizada || 1;
+    var ef = velCount>0 ? velSum/velCount : null;
 
-  const machineOpts=`<option value="">— Seleccionar máquina —</option>`+MACHINES.map(m=>`<option value="${m}">${m}</option>`).join("");
+    var stateRows = "";
+    for(var sk=0;sk<STATUS_KEYS.length;sk++){
+      var key=STATUS_KEYS[sk];
+      var tc=STATUS_CFG[key];
+      var tKey="t"+key.charAt(0).toUpperCase()+key.slice(1);
+      var secs=times[tKey]||0;
+      var pct=(secs/total)*100;
+      stateRows += '<div style="background:#0F172A;border-radius:8px;padding:10px 12px"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11px;color:'+tc.color+';font-weight:600">'+tc.icon+' '+tc.label+'</span><span style="font-size:11px;color:#64748B">'+pct.toFixed(0)+'%</span></div><div style="background:#1E293B;border-radius:4px;height:6px;overflow:hidden;margin-bottom:4px"><div style="width:'+pct+'%;background:'+tc.color+';height:100%;border-radius:4px"></div></div><div style="font-size:13px;font-weight:700;color:'+tc.color+';font-family:monospace">'+fmtTime(secs)+'</div></div>';
+    }
 
-  document.getElementById("view-nueva").innerHTML=`
-    <div style="max-width:640px">
-      <h2 style="font-size:22px;font-weight:700;margin-bottom:24px;color:#F1F5F9">＋ Nueva Orden de Producción</h2>
-      ${catInfo}
-      <div class="card" style="padding:28px">
-        <div class="form-grid">
-          <div>
-            <label class="lbl"># Orden * ${catalog.length>0?'<span style="color:#10B981">↵ autocompletará</span>':''}</label>
-            <input id="f-ordenId" class="inp" placeholder="Ej. OP-001" oninput="autofillOrder(this.value)"/>
-          </div>
-          <div><label class="lbl">Producto *</label><input id="f-producto" class="inp" placeholder="Nombre del producto"/></div>
-          <div><label class="lbl">Cliente</label><input id="f-cliente" class="inp" placeholder="Nombre del cliente"/></div>
-          <div><label class="lbl">Cantidad objetivo</label><input id="f-cantidad" class="inp" type="text" placeholder="0" readonly style="color:#94A3B8;cursor:not-allowed;opacity:.8"/></div>
-          <div><label class="lbl">Vel. Objetivo (uds/hr)</label><input id="f-velObj" class="inp" type="number" placeholder="0"/></div>
-          <div><label class="lbl">Vel. Actual (uds/hr)</label><input id="f-velAct" class="inp" type="number" placeholder="0"/></div>
-          <div><label class="lbl">Máquina</label><select id="f-maquina" class="inp">${machineOpts}</select></div>
-          <div style="grid-column:span 2"><label class="lbl">Operario</label><select id="f-operario" class="inp">
-            <option value="">— Seleccionar operario —</option>
-            ${OPERARIOS.map(op=>`<option value="${op}">${op}</option>`).join("")}
-          </select></div>
-          <div><label class="lbl">Estado inicial</label><select id="f-status" class="inp">${statusOpts}</select></div>
-          <div style="grid-column:span 2"><label class="lbl">Notas</label>
-            <textarea id="f-notas" class="inp" rows="3" placeholder="Observaciones iniciales…"></textarea></div>
-        </div>
-        <div style="display:flex;gap:12px;margin-top:24px">
-          <button class="btn" onclick="submitOrder()" style="flex:1;padding:12px;background:linear-gradient(135deg,#3B82F6,#6366F1);color:#fff;font-size:15px">＋ Crear Orden</button>
-          <button class="btn" onclick="setView('dashboard')" style="padding:12px 20px;background:#1E293B;color:#94A3B8;border:1px solid #334155;font-size:14px">Cancelar</button>
-        </div>
-      </div>
-    </div>`;
+    var orderRows = "";
+    for(var k=0;k<mos.length;k++){
+      var o=mos[k];
+      orderRows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#0F172A;border-radius:8px;margin-bottom:6px;cursor:pointer" onclick="setView(\'detalle\',\''+o.id+'\')"><div><span style="font-size:12px;font-family:monospace;color:#94A3B8">'+escHtml(o.ordenId)+' </span><span style="font-size:13px;font-weight:600;color:#E2E8F0">'+escHtml(o.producto)+'</span></div>'+badgeHtml(o.status)+'</div>';
+    }
+
+    parts.push('<div class="card" style="padding:24px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px"><div><div style="font-size:18px;font-weight:700;color:#F1F5F9">'+m+'</div><div style="font-size:12px;color:#64748B;margin-top:2px">'+mos.length+' órdenes · '+activeCount+' activas</div></div>'+
+      (ef!==null ? '<div style="text-align:center"><div style="font-size:26px;font-weight:700;color:'+velColor(ef)+';font-family:monospace">'+ef.toFixed(0)+'%</div><div style="font-size:10px;color:#64748B">eficiencia</div></div>' : '')+
+      '</div><div style="font-size:11px;color:#64748B;margin-bottom:8px;font-weight:600">TIEMPO ACUMULADO POR ESTADO</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">'+stateRows+'</div>'+
+      (mos.length>0 ? '<div style="font-size:11px;color:#64748B;margin-bottom:8px;font-weight:600">ÓRDENES</div>'+orderRows : '<div style="font-size:13px;color:#475569;text-align:center;padding:16px">Sin órdenes asignadas</div>')+
+      '</div>');
+  }
+  parts.push('</div>');
+  el.innerHTML = parts.join("");
 }
 
-function autofillOrder(val) {
-  if(!val||catalog.length===0) return;
-  const norm=s=>String(s).toLowerCase().trim();
-  const found=catalog.find(r=>norm(r.ordenId)===norm(val));
+// ============ ORDENES (tabla) ============
+function renderOrdenes(){
+  var el = document.getElementById("view-ordenes");
+  if(!el) return;
+  var parts = ['<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="font-size:20px;font-weight:700">📋 Todas las Órdenes</h2><button class="btn" onclick="setView(\'nueva\')" style="padding:8px 20px;background:#3B82F6;color:#fff;font-size:13px">＋ Nueva</button></div>'];
+
+  if(orders.length===0){
+    parts.push('<div class="card" style="padding:40px;text-align:center;color:#475569">Sin órdenes registradas</div>');
+  } else {
+    parts.push('<div class="card" style="overflow:auto"><table class="tbl"><thead><tr><th>Orden</th><th>Producto</th><th>Máquina</th><th>Estado</th><th>Montaje</th><th>Ajuste</th><th>Producción</th><th>Efic.</th><th></th></tr></thead><tbody>');
+    for(var i=0;i<orders.length;i++){
+      var o=orders[i];
+      var t=computeTimes(o);
+      var vp = Number(o.velocidadObjetivo)>0 ? ((Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100).toFixed(0) : "—";
+      parts.push('<tr style="background:'+(i%2?"#0F172A18":"transparent")+'"><td style="font-family:monospace;color:#94A3B8">'+escHtml(o.ordenId)+'</td><td style="font-weight:600;color:#E2E8F0">'+escHtml(o.producto)+'</td><td style="color:#8B5CF6;font-size:11px">'+escHtml(o.maquina||"—")+'</td><td>'+badgeHtml(o.status)+'</td><td style="font-family:monospace;color:#94A3B8;font-size:11px">'+fmtTime(t.tSetup)+'</td><td style="font-family:monospace;color:#94A3B8;font-size:11px">'+fmtTime(t.tAjuste)+'</td><td style="font-family:monospace;color:#94A3B8;font-size:11px">'+fmtTime(t.tProduccion)+'</td><td>'+(vp!=="—"?('<span style="color:'+velColor(Number(vp))+';font-weight:700">'+vp+'%</span>'):"—")+'</td><td><button class="btn" onclick="setView(\'detalle\',\''+o.id+'\')" style="padding:4px 10px;font-size:11px;background:#1E293B;color:#94A3B8;border:1px solid #334155">Ver →</button></td></tr>');
+    }
+    parts.push('</tbody></table></div>');
+  }
+  el.innerHTML = parts.join("");
+}
+
+// ============ NUEVA ORDEN ============
+function renderNueva(){
+  var el = document.getElementById("view-nueva");
+  if(!el) return;
+  var catInfo = catalog.length>0
+    ? '<div style="background:#052E16;border:1px solid #065F46;border-radius:10px;padding:10px 16px;margin-bottom:16px;font-size:12px;color:#6EE7B7">📂 Catálogo activo: <strong>'+catalog.length+'</strong> órdenes · Escribe el # y el sistema autocompletará los datos</div>'
+    : '<div style="background:#1E293B;border:1px solid #334155;border-radius:10px;padding:10px 16px;margin-bottom:16px;font-size:12px;color:#64748B">💡 Sube un Excel con tu catálogo de órdenes para autocompletado</div>';
+
+  var statusOpts = "";
+  for(var i=0;i<STATUS_KEYS.length;i++){
+    var k=STATUS_KEYS[i];
+    if(k==="finalizada") continue;
+    var c=STATUS_CFG[k];
+    statusOpts += '<option value="'+k+'">'+c.icon+' '+c.label+'</option>';
+  }
+  var machineOpts = '<option value="">— Seleccionar máquina —</option>';
+  for(var m=0;m<MACHINES.length;m++){ machineOpts += '<option value="'+MACHINES[m]+'">'+MACHINES[m]+'</option>'; }
+  var operarioOpts = '<option value="">— Seleccionar operario —</option>';
+  for(var o=0;o<OPERARIOS.length;o++){ operarioOpts += '<option value="'+OPERARIOS[o]+'">'+OPERARIOS[o]+'</option>'; }
+
+  el.innerHTML =
+    '<div style="max-width:640px"><h2 style="font-size:22px;font-weight:700;margin-bottom:24px">＋ Nueva Orden de Producción</h2>'+
+    catInfo+
+    '<div class="card" style="padding:28px"><div class="form-grid">'+
+      '<div><label style="font-size:12px;color:#64748B;display:block;margin-bottom:6px"># Orden *</label><input id="f-ordenId" class="inp" placeholder="Ej. OP-001" oninput="autofillOrder(this.value)"/></div>'+
+      '<div><label style="font-size:12px;color:#64748B;display:block;margin-bottom:6px">Producto *</label><input id="f-producto" class="inp" placeholder="Nombre del producto"/></div>'+
+      '<div><label style="font-size:12px;color:#64748B;display:block;margin-bottom:6px">Cliente</label><input id="f-cliente" class="inp" placeholder="Nombre del cliente"/></div>'+
+      '<div><label style="font-size:12px;color:#64748B;display:block;margin-bottom:6px">Cantidad objetivo</label><input id="f-cantidad" class="inp" type="text" readonly style="opacity:.8"/></div>'+
+      '<div><label style="font-size:12px;color:#64748B;display:block;margin-bottom:6px">Metros lineales</label><input id="f-metros" class="inp" type="text" readonly style="opacity:.8"/></div>'+
+      '<div><label style="font-size:12px;color:#64748B;display:block;margin-bottom:6px">Vel. Objetivo (uds/hr)</label><input id="f-velObj" class="inp" type="number" placeholder="0"/></div>'+
+      '<div><label style="font-size:12px;color:#64748B;display:block;margin-bottom:6px">Vel. Actual (uds/hr)</label><input id="f-velAct" class="inp" type="number" placeholder="0"/></div>'+
+      '<div><label style="font-size:12px;color:#64748B;display:block;margin-bottom:6px">Máquina</label><select id="f-maquina" class="inp">'+machineOpts+'</select></div>'+
+      '<div><label style="font-size:12px;color:#64748B;display:block;margin-bottom:6px">Estado inicial</label><select id="f-status" class="inp">'+statusOpts+'</select></div>'+
+      '<div style="grid-column:span 2"><label style="font-size:12px;color:#64748B;display:block;margin-bottom:6px">Operario</label><select id="f-operario" class="inp">'+operarioOpts+'</select></div>'+
+      '<div style="grid-column:span 2"><label style="font-size:12px;color:#64748B;display:block;margin-bottom:6px">Notas</label><textarea id="f-notas" class="inp" rows="3" placeholder="Observaciones…"></textarea></div>'+
+    '</div>'+
+    '<div style="display:flex;gap:12px;margin-top:24px"><button class="btn" onclick="submitOrder()" style="flex:1;padding:12px;background:#3B82F6;color:#fff;font-size:15px">＋ Crear Orden</button><button class="btn" onclick="setView(\'dashboard\')" style="padding:12px 20px;background:#1E293B;color:#94A3B8;border:1px solid #334155">Cancelar</button></div>'+
+    '</div></div>';
+}
+
+function autofillOrder(val){
+  if(!val || catalog.length===0) return;
+  var norm = function(s){ return String(s).toLowerCase().trim(); };
+  var found = null;
+  for(var i=0;i<catalog.length;i++){
+    if(norm(catalog[i].ordenId)===norm(val)){ found=catalog[i]; break; }
+  }
   if(!found) return;
-  if(found.producto)          document.getElementById("f-producto").value=found.producto;
-  if(found.cliente)           document.getElementById("f-cliente").value=found.cliente;
-  if(found.cantidad)          document.getElementById("f-cantidad").value=Number(found.cantidad).toLocaleString("es-CO");
-  if(found.velocidadObjetivo) document.getElementById("f-velObj").value=found.velocidadObjetivo;
+  if(found.producto) document.getElementById("f-producto").value = found.producto;
+  if(found.cliente) document.getElementById("f-cliente").value = found.cliente;
+  if(found.cantidad) document.getElementById("f-cantidad").value = Number(found.cantidad).toLocaleString("es-CO");
+  if(found.metros) document.getElementById("f-metros").value = Number(found.metros).toLocaleString("es-CO");
   if(found.maquina){
-    const sel=document.getElementById("f-maquina");
-    for(let i=0;i<sel.options.length;i++){
-      if(sel.options[i].value===found.maquina){sel.selectedIndex=i;break;}
+    var sel = document.getElementById("f-maquina");
+    for(var j=0;j<sel.options.length;j++){
+      if(sel.options[j].value===found.maquina){ sel.selectedIndex=j; break; }
     }
   }
-  // Turno se asigna automáticamente al crear la orden (en el servidor)
 }
 
-async function submitOrder() {
-  const ordenId=document.getElementById("f-ordenId").value.trim();
-  const producto=document.getElementById("f-producto").value.trim();
-  if(!ordenId||!producto){ alert("# Orden y Producto son obligatorios"); return; }
-  const body={
-    ordenId, producto,
-    cliente:  document.getElementById("f-cliente").value.trim(),
-    maquina:  document.getElementById("f-maquina").value,
-    operario: document.getElementById("f-operario")?document.getElementById("f-operario").value:"",
+function submitOrder(){
+  var ordenId = document.getElementById("f-ordenId").value.trim();
+  var producto = document.getElementById("f-producto").value.trim();
+  if(!ordenId || !producto){ alert("# Orden y Producto son obligatorios"); return; }
+  var body = {
+    ordenId: ordenId,
+    producto: producto,
+    cliente: document.getElementById("f-cliente").value.trim(),
+    maquina: document.getElementById("f-maquina").value,
+    operario: document.getElementById("f-operario").value,
     cantidad: Number(String(document.getElementById("f-cantidad").value).replace(/\./g,"").replace(/,/g,""))||0,
+    metros: Number(String(document.getElementById("f-metros").value).replace(/\./g,"").replace(/,/g,""))||0,
     velocidadObjetivo: Number(document.getElementById("f-velObj").value)||0,
-    velocidadActual:   Number(document.getElementById("f-velAct").value)||0,
-    notas:    document.getElementById("f-notas").value.trim(),
-    status:   document.getElementById("f-status").value,
+    velocidadActual: Number(document.getElementById("f-velAct").value)||0,
+    notas: document.getElementById("f-notas").value.trim(),
+    status: document.getElementById("f-status").value
   };
-  await fetch("/api/orders",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-  setView("dashboard");
+  fetch("/api/orders",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ loadOrders(); setView("dashboard"); })
+    .catch(function(e){ alert("Error creando la orden: "+e.message); });
 }
 
-// ═══════════════════════════════════════════════
-// DETALLE ORDEN
-// ═══════════════════════════════════════════════
-function renderDetalle() {
-  const order=orders.find(o=>o.id===detailId);
-  if(!order){ document.getElementById("view-detalle").innerHTML=`<div style="color:#64748B">Orden no encontrada</div>`; return; }
-
-  const t=computeTimes(order);
-  const vp=Number(order.velocidadObjetivo)>0?Math.min((Number(order.velocidadActual)/Number(order.velocidadObjetivo))*100,100):0;
-  const acc=getAcciones(order);
-  const cfg=STATUS_CONFIG[order.status]||STATUS_CONFIG.setup;
-
-  // State time boxes
-  const timeBoxes=STATUS_KEYS.map(k=>{
-    const tc=STATUS_CONFIG[k];
-    const tKey="t"+k.charAt(0).toUpperCase()+k.slice(1);
-    const live=order.status===k;
-    return `<div class="time-box${live?" live":""}" style="--c:${tc.color};${live?"border-color:"+tc.color:""}">
-      ${live?`<div style="width:7px;height:7px;background:${tc.color};border-radius:50%;margin-bottom:6px" class="pulse"></div>`:""}
-      <div style="font-size:10px;color:#64748B;margin-bottom:4px">${tc.icon} ${tc.label}</div>
-      <div style="font-size:16px;font-weight:700;color:${tc.color};font-family:'JetBrains Mono',monospace">${fmtTime(t[tKey])}</div>
-    </div>`;
-  }).join("");
-
-  // History
-  const hist=order.history||[];
-  const histHtml=hist.map((h,i)=>{
-    const next=hist[i+1];
-    const dur=next?Math.floor((new Date(next.at)-new Date(h.at))/1000):null;
-    const hc=STATUS_CONFIG[h.status]||STATUS_CONFIG.setup;
-    return `<div class="hist-item">
-      <div class="hist-dot" style="background:${hc.dark}">${hc.icon}</div>
-      <div style="flex:1">
-        <div style="display:flex;justify-content:space-between">
-          <span style="font-size:13px;font-weight:600;color:${hc.color}">${hc.label}</span>
-          <span style="font-size:11px;color:#475569;font-family:'JetBrains Mono',monospace">${fmtDT(h.at)}</span>
-        </div>
-        ${dur!==null?`<div style="font-size:11px;color:#64748B">Duración: ${fmtTime(dur)}</div>`:""}
-      </div>
-    </div>`;
-  }).join("");
-
-  // Acciones
-  const accHtml=acc.map(a=>`<div class="accion ${a.tipo}">${a.msg}</div>`).join("");
-
-  // Status buttons
-  const statusBtns=STATUS_KEYS.map(k=>{
-    const sc=STATUS_CONFIG[k];
-    const isCur=order.status===k;
-    const clickHandler = isCur ? "" : `onclick="patchStatus('${order.id}','${k}')"`;
-    return '<button class="btn" '+clickHandler+' '+(isCur?'disabled':'')+
-      ' style="padding:10px;font-size:13px;text-align:left;width:100%;cursor:'+(isCur?'default':'pointer')+
-      ';background:'+(isCur?sc.color:'#0F172A')+
-      ';color:'+(isCur?'#fff':'#94A3B8')+
-      ';border:1px solid '+(isCur?sc.color:'#334155')+
-      ';opacity:'+(isCur?'1':'.85')+'">'+
-      sc.icon+' '+sc.label+(isCur?' ← actual':'')+
-    '</button>';
-  }).join("");
-
-  // Ajustes list
-  const ajList=(order.ajustes||[]).length>0
-    ? (order.ajustes||[]).map(a=>`
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#0F172A;border-radius:8px;margin-bottom:6px">
-          <div>
-            <span style="font-size:13px;color:#E2E8F0">${a.descripcion}</span>
-            ${a.duracion?`<span style="font-size:11px;color:#64748B;margin-left:8px">(${a.duracion} min)</span>`:""}
-            ${a.reporta?`<span style="font-size:11px;color:#10B981;margin-left:8px">👤 ${a.reporta}</span>`:""}
-          </div>
-          <span style="font-size:11px;color:#475569;font-family:'JetBrains Mono',monospace">${fmtDT(a.at)}</span>
-        </div>`).join("")
-    : `<div style="color:#475569;font-size:13px;text-align:center;padding:16px">Sin novedades registradas</div>`;
-
-  document.getElementById("view-detalle").innerHTML=`
-    <div>
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap">
-        <button class="btn" onclick="setView('dashboard')" style="padding:6px 14px;font-size:13px;background:#1E293B;color:#94A3B8;border:1px solid #334155">← Volver</button>
-        <h2 style="font-size:20px;font-weight:700">${order.producto}</h2>
-        <span style="font-family:'JetBrains Mono',monospace;color:#64748B;font-size:13px">${order.ordenId}</span>
-        ${order.maquina?`<span style="font-size:12px;color:#8B5CF6;background:#1E1B4B;padding:3px 10px;border-radius:20px;border:1px solid #4C1D95">🖥️ ${order.maquina}</span>`:""}
-        ${order.cliente?`<span style="font-size:12px;color:#64748B">👤 ${order.cliente}</span>`:""}
-        ${order.operario?`<span style="font-size:12px;color:#10B981;background:#052E16;padding:3px 10px;border-radius:20px;border:1px solid #065F46">👷 ${order.operario}</span>`:""}
-        ${order.turno?`<span style="font-size:12px;color:#475569">🕐 ${order.turno}</span>`:""}
-        ${badge(order.status)}
-      </div>
-
-      <div class="detail-grid">
-        <div>
-          <!-- Tiempos -->
-          <div class="card" style="padding:20px;margin-bottom:16px">
-            <h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">⏱️ Tiempos por Estado</h3>
-            <div class="state-times">${timeBoxes}</div>
-          </div>
-          <!-- Historial -->
-          <div class="card" style="padding:20px;margin-bottom:16px">
-            <h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">📅 Historial de Estados</h3>
-            <div style="max-height:180px;overflow:auto">${histHtml}</div>
-          </div>
-          <!-- Velocidad -->
-          <div class="card" style="padding:20px;margin-bottom:16px">
-            <h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">⚡ Velocidad</h3>
-    ${(()=>{ const eta=calcETA(order); if(!eta||order.status!=="produccion") return "";
-      return `<div style="background:#052E16;border:1px solid #065F46;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
-        <div><div style="font-size:11px;color:#6EE7B7;margin-bottom:2px">⏰ Hora estimada de finalización</div>
-        <div style="font-size:22px;font-weight:700;color:#10B981;font-family:'JetBrains Mono',monospace">${eta.hora}</div>
-        <div style="font-size:11px;color:#6EE7B7">${eta.remaining} min restantes · ${eta.pct}% completado · Total estimado: ${eta.totalMin} min</div>
-        <div style="font-size:10px;color:#475569;margin-top:2px">Fórmula: (Metros lineales ÷ Velocidad actual) × 60</div></div></div>`;})()}
-            <div style="display:flex;align-items:center;gap:16px">
-              <div style="flex:1">
-                <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-                  <span style="font-size:12px;color:#64748B">Actual: <strong style="color:#E2E8F0">${order.velocidadActual||0}</strong> uds/hr</span>
-                  <span style="font-size:12px;color:#64748B">Objetivo: <strong style="color:#E2E8F0">${order.velocidadObjetivo||0}</strong> uds/hr</span>
-                </div>
-                <div class="vel-bar-wrap"><div class="vel-bar" style="width:${vp}%;background:${velColor(vp)}"></div></div>
-                <div style="text-align:right;font-size:12px;margin-top:4px;color:${velColor(vp)};font-weight:700">${vp.toFixed(0)}%</div>
-              </div>
-              <div style="display:flex;gap:8px;align-items:center">
-                <input id="vel-inp" type="number" value="${order.velocidadActual||0}"
-                  style="width:90px;padding:8px 10px;background:#0F172A;border:1px solid #334155;border-radius:8px;color:#E2E8F0;font-size:14px;font-family:inherit"/>
-                <button class="btn" onclick="patchVel('${order.id}')" style="padding:8px 14px;background:#1D4ED8;color:#fff;font-size:13px">Actualizar</button>
-              </div>
-            </div>
-          </div>
-          <!-- Ajustes -->
-          <div class="card" style="padding:20px">
-            <h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">📋 Novedades</h3>
-            <button class="btn" onclick="openModal('${order.id}')" style="padding:8px 16px;background:#4C1D95;color:#fff;font-size:13px;margin-bottom:14px">＋ Registrar Novedad</button>
-            ${ajList}
-          </div>
-        </div>
-        <!-- Right -->
-        <div>
-          <div class="card" style="padding:20px;margin-bottom:16px">
-            <h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">🎛️ Control de Estado</h3>
-            <div style="display:flex;flex-direction:column;gap:8px">${statusBtns}</div>
-          </div>
-          <div class="card" style="padding:20px">
-            <h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">🎯 Acciones Recomendadas</h3>
-            ${accHtml}
-          </div>
-        </div>
-      </div>
-    </div>`;
+// ============ DETALLE ============
+function findOrder(id){
+  for(var i=0;i<orders.length;i++){ if(orders[i].id===id) return orders[i]; }
+  return null;
 }
 
-// ═══════════════════════════════════════════════
-// API CALLS
-// ═══════════════════════════════════════════════
-async function patchStatus(id, status) {
-  // Optimistic update — update local state immediately so UI responds
-  const order = orders.find(o=>o.id===id);
-  if(order) {
-    const now = new Date().toISOString();
+function renderDetalle(){
+  var el = document.getElementById("view-detalle");
+  if(!el) return;
+  var order = findOrder(detailId);
+  if(!order){ el.innerHTML = '<div style="color:#64748B">Orden no encontrada</div>'; return; }
+
+  var t = computeTimes(order);
+  var velObj = Number(order.velocidadObjetivo)||0;
+  var velReal = Number(order.velocidadActual)||0;
+  var vp = velObj>0 ? Math.min((velReal/velObj)*100,100) : 0;
+  var acc = getAcciones(order);
+  var cfg = STATUS_CFG[order.status] || STATUS_CFG.setup;
+
+  var timeBoxes = "";
+  for(var i=0;i<STATUS_KEYS.length;i++){
+    var k=STATUS_KEYS[i];
+    var tc=STATUS_CFG[k];
+    var tKey="t"+k.charAt(0).toUpperCase()+k.slice(1);
+    var live = order.status===k;
+    timeBoxes += '<div style="background:#0F172A;border-radius:10px;padding:12px;border:1px solid '+(live?tc.color:"#1E293B")+'"><div style="font-size:10px;color:#64748B;margin-bottom:4px">'+tc.icon+' '+tc.label+'</div><div style="font-size:16px;font-weight:700;color:'+tc.color+';font-family:monospace">'+fmtTime(t[tKey])+'</div></div>';
+  }
+
+  var hist = order.history||[];
+  var histHtml = "";
+  for(var hi=0;hi<hist.length;hi++){
+    var h=hist[hi];
+    var next=hist[hi+1];
+    var dur = next ? Math.floor((new Date(next.at)-new Date(h.at))/1000) : null;
+    var hc = STATUS_CFG[h.status] || STATUS_CFG.setup;
+    histHtml += '<div style="display:flex;gap:12px;margin-bottom:10px"><div style="width:28px;height:28px;border-radius:50%;background:'+hc.dark+';display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">'+hc.icon+'</div><div style="flex:1"><div style="display:flex;justify-content:space-between"><span style="font-size:13px;font-weight:600;color:'+hc.color+'">'+hc.label+'</span><span style="font-size:11px;color:#475569;font-family:monospace">'+fmtDT(h.at)+'</span></div>'+(dur!==null?'<div style="font-size:11px;color:#64748B">Duración: '+fmtTime(dur)+'</div>':'')+'</div></div>';
+  }
+
+  var statusBtns = "";
+  for(var si=0;si<STATUS_KEYS.length;si++){
+    var sk=STATUS_KEYS[si];
+    var sc=STATUS_CFG[sk];
+    var isCur = order.status===sk;
+    statusBtns += '<button class="btn" '+(isCur?'disabled':'onclick="patchStatus(\''+order.id+'\',\''+sk+'\')"')+' style="padding:10px;font-size:13px;text-align:left;width:100%;background:'+(isCur?sc.color:"#0F172A")+';color:'+(isCur?"#fff":"#94A3B8")+';border:1px solid '+(isCur?sc.color:"#334155")+'">'+sc.icon+' '+sc.label+(isCur?' ← actual':'')+'</button>';
+  }
+
+  var ajList = "";
+  var ajustes = order.ajustes||[];
+  if(ajustes.length>0){
+    for(var aj=0;aj<ajustes.length;aj++){
+      var a=ajustes[aj];
+      ajList += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#0F172A;border-radius:8px;margin-bottom:6px"><div><span style="font-size:13px;color:#E2E8F0">'+escHtml(a.descripcion)+'</span>'+(a.duracion?'<span style="font-size:11px;color:#64748B;margin-left:8px">('+a.duracion+' min)</span>':'')+(a.reporta?'<span style="font-size:11px;color:#10B981;margin-left:8px">👤 '+escHtml(a.reporta)+'</span>':'')+'</div><span style="font-size:11px;color:#475569;font-family:monospace">'+fmtDT(a.at)+'</span></div>';
+    }
+  } else {
+    ajList = '<div style="color:#475569;font-size:13px;text-align:center;padding:16px">Sin novedades registradas</div>';
+  }
+
+  var etaHtml = "";
+  var eta = calcETA(order);
+  if(eta && order.status==="produccion"){
+    etaHtml = '<div style="background:#052E16;border:1px solid #065F46;border-radius:8px;padding:10px 14px;margin-bottom:12px"><div style="font-size:11px;color:#6EE7B7;margin-bottom:2px">⏰ Hora estimada de finalización</div><div style="font-size:22px;font-weight:700;color:#10B981;font-family:monospace">'+eta.hora+'</div><div style="font-size:11px;color:#6EE7B7">'+eta.remaining+' min restantes · '+eta.pct+'% completado</div><div style="font-size:10px;color:#475569;margin-top:2px">Fórmula: (Metros lineales ÷ Velocidad actual) × 60</div></div>';
+  }
+
+  el.innerHTML =
+    '<div><div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap">'+
+      '<button class="btn" onclick="setView(\'dashboard\')" style="padding:6px 14px;font-size:13px;background:#1E293B;color:#94A3B8;border:1px solid #334155">← Volver</button>'+
+      '<h2 style="font-size:20px;font-weight:700">'+escHtml(order.producto)+'</h2>'+
+      '<span style="font-family:monospace;color:#64748B;font-size:13px">'+escHtml(order.ordenId)+'</span>'+
+      (order.maquina?'<span style="font-size:12px;color:#8B5CF6;background:#1E1B4B;padding:3px 10px;border-radius:20px;border:1px solid #4C1D95">🖥️ '+escHtml(order.maquina)+'</span>':'')+
+      (order.operario?'<span style="font-size:12px;color:#10B981;background:#052E16;padding:3px 10px;border-radius:20px;border:1px solid #065F46">👷 '+escHtml(order.operario)+'</span>':'')+
+      (order.cliente?'<span style="font-size:12px;color:#64748B">👤 '+escHtml(order.cliente)+'</span>':'')+
+      (order.turno?'<span style="font-size:12px;color:#475569">🕐 '+order.turno+'</span>':'')+
+      badgeHtml(order.status)+
+    '</div>'+
+    '<div class="detail-grid"><div>'+
+      '<div class="card" style="padding:20px;margin-bottom:16px"><h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">⏱️ Tiempos por Estado</h3><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">'+timeBoxes+'</div></div>'+
+      '<div class="card" style="padding:20px;margin-bottom:16px"><h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">📅 Historial de Estados</h3><div style="max-height:180px;overflow:auto">'+histHtml+'</div></div>'+
+      '<div class="card" style="padding:20px;margin-bottom:16px"><h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">⚡ Velocidad</h3>'+etaHtml+
+        '<div style="display:flex;align-items:center;gap:16px"><div style="flex:1"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:12px;color:#64748B">Actual: <strong style="color:#E2E8F0">'+velReal+'</strong> uds/hr</span><span style="font-size:12px;color:#64748B">Objetivo: <strong style="color:#E2E8F0">'+velObj+'</strong> uds/hr</span></div><div style="background:#0F172A;border-radius:8px;height:10px;overflow:hidden"><div style="width:'+vp+'%;background:'+velColor(vp)+';height:100%;border-radius:8px"></div></div><div style="text-align:right;font-size:12px;margin-top:4px;color:'+velColor(vp)+';font-weight:700">'+vp.toFixed(0)+'%</div></div>'+
+        '<div style="display:flex;gap:8px;align-items:center"><input id="vel-inp" type="number" value="'+velReal+'" style="width:90px;padding:8px 10px;background:#0F172A;border:1px solid #334155;border-radius:8px;color:#E2E8F0;font-size:14px"/><button class="btn" onclick="patchVel(\''+order.id+'\')" style="padding:8px 14px;background:#1D4ED8;color:#fff;font-size:13px">Actualizar</button></div></div></div>'+
+      '<div class="card" style="padding:20px"><h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">📋 Novedades</h3><button class="btn" onclick="openModal(\''+order.id+'\')" style="padding:8px 16px;background:#4C1D95;color:#fff;font-size:13px;margin-bottom:14px">＋ Registrar Novedad</button>'+ajList+'</div>'+
+    '</div><div>'+
+      '<div class="card" style="padding:20px;margin-bottom:16px"><h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">🎛️ Control de Estado</h3><div style="display:flex;flex-direction:column;gap:8px">'+statusBtns+'</div></div>'+
+      '<div class="card" style="padding:20px"><h3 style="font-size:14px;font-weight:600;color:#94A3B8;margin-bottom:14px">🎯 Acciones Recomendadas</h3>'+accionesHtml(acc)+'</div>'+
+    '</div></div></div>';
+}
+
+// ============ API ACTIONS ============
+function patchStatus(id, status){
+  var order = findOrder(id);
+  if(order){
+    var now = new Date().toISOString();
     order.status = status;
-    order.history = [...(order.history||[]), {status, at: now}];
+    order.history = (order.history||[]).concat([{status:status, at:now}]);
     if(status==="finalizada") order.finalizadaAt = now;
-    renderCurrent(); // re-render immediately with new state
+    renderView(curView);
   }
-  // Then persist to server
-  const r = await fetch(`/api/orders/${id}/status`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});
-  if(!r.ok) {
-    // Revert on error - SSE will correct it
-    console.error("patchStatus failed:", await r.text());
-  }
-}
-async function patchVel(id) {
-  const el=document.getElementById("vel-inp");
-  if(!el){console.error("vel-inp not found");return;}
-  const vel=Number(el.value)||0;
-  el.style.borderColor="#10B981";
-  setTimeout(()=>{if(el)el.style.borderColor="";},1500);
-  await fetch(`/api/orders/${id}/velocidad`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({velocidadActual:vel})});
+  fetch("/api/orders/"+id+"/status",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:status})})
+    .then(function(r){ if(!r.ok) console.error("patchStatus failed"); loadOrders(); })
+    .catch(function(e){ console.error(e); });
 }
 
-// ── Modal ajuste ──
-function openModal(oid) {
-  ajusteOid=oid;
-  document.getElementById("aj-desc").value="";
-  document.getElementById("aj-dur").value="";
-  // Populate operarios in reporta select
-  const sel=document.getElementById("aj-reporta");
-  sel.innerHTML='<option value="">— Seleccionar —</option>'+REPORTANTES.map(op=>`<option value="${op}">${op}</option>`).join("");
+function patchVel(id){
+  var elInp = document.getElementById("vel-inp");
+  if(!elInp) return;
+  var vel = Number(elInp.value)||0;
+  fetch("/api/orders/"+id+"/velocidad",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({velocidadActual:vel})})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ loadOrders(); })
+    .catch(function(e){ alert("Error: "+e.message); });
+}
+
+function openModal(oid){
+  ajusteOid = oid;
+  document.getElementById("aj-desc").value = "";
+  document.getElementById("aj-dur").value = "";
+  var sel = document.getElementById("aj-reporta");
+  var opts = '<option value="">— Seleccionar —</option>';
+  for(var i=0;i<REPORTANTES.length;i++){ opts += '<option value="'+REPORTANTES[i]+'">'+REPORTANTES[i]+'</option>'; }
+  sel.innerHTML = opts;
   document.getElementById("modal").classList.add("open");
-  setTimeout(()=>document.getElementById("aj-desc").focus(),100);
 }
-function closeModal() { document.getElementById("modal").classList.remove("open"); ajusteOid=null; }
-async function submitAjuste() {
-  const desc=document.getElementById("aj-desc").value.trim();
-  if(!desc||!ajusteOid) return;
-  const dur=document.getElementById("aj-dur").value;
-  const reporta=document.getElementById("aj-reporta").value;
-  await fetch(`/api/orders/${ajusteOid}/ajuste`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({descripcion:desc,duracion:dur,reporta})});
-  closeModal();
+function closeModal(){
+  document.getElementById("modal").classList.remove("open");
+  ajusteOid = null;
 }
-document.getElementById("modal").addEventListener("click",e=>{ if(e.target===document.getElementById("modal")) closeModal(); });
-
-// ── Excel upload ──
-document.getElementById("excel-input").addEventListener("change",async function(e){
-  const file=e.target.files[0]; if(!file) return;
-  const reader=new FileReader();
-  reader.onload=async ev=>{
-    try{
-      const wb=XLSX.read(ev.target.result,{type:"binary"});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
-      const normalize=s=>String(s).toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g,"");
-      const MAQUINAS_CAT=["Nilpeter 1","Nilpeter 2","Kromia"];
-      const mapped=rows.map(row=>{
-        const norm={}; Object.entries(row).forEach(([k,v])=>{norm[normalize(k)]=v;});
-        // # Orden — columna especifica del Excel de planta
-        const ordenId=String(norm["ordendeproduccionordendeproduccionnumber"]||norm["ordendeproduccionordendeproductionnumber"]||norm["orden"]||norm["norden"]||norm["id"]||"").trim();
-        // Producto = Referencia
-        const producto=String(norm["produccionreferencia"]||norm["referencia"]||norm["producto"]||norm["descripcion"]||"").trim();
-        // Cliente = Organizacion
-        const cliente=String(norm["produccionorganizacion"]||norm["organizacion"]||norm["cliente"]||"").trim();
-        // Cantidad = Total Etiquetas
-        const cantidad=Number(norm["ordendeproducciontotaletiquetas"]||norm["totaletiquetas"]||norm["cantidad"]||0);
-        // Metros lineales
-        const metros=Number(norm["ordendeproducciontotalmtslineales"]||norm["totalmtslineales"]||norm["metros"]||0);
-        // Maquina = Centro de Proceso (primera si hay varias)
-        const rawMaq=String(norm["ordendeproduccioncentrodeproceso"]||norm["centrodeproceso"]||norm["maquina"]||"").split(",")[0].trim();
-        const maquina=MAQUINAS_CAT.find(m=>normalize(rawMaq).includes(normalize(m)))||rawMaq||"";
-        return { ordenId, producto, cliente, cantidad, metros, velocidadObjetivo:0, maquina };
-      }).filter(r=>r.ordenId!=="");
-      await fetch("/api/catalog",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({rows:mapped})});
-      catalog=mapped;
-      showStatusBar(`✅ ${mapped.length} órdenes cargadas desde "${file.name}"`, true);
-    }catch(err){ showStatusBar("❌ Error leyendo el archivo. Verifica que sea .xlsx válido.", false); }
-  };
-  reader.readAsBinaryString(file);
-  e.target.value="";
+function submitAjuste(){
+  var desc = document.getElementById("aj-desc").value.trim();
+  if(!desc || !ajusteOid) return;
+  var dur = document.getElementById("aj-dur").value;
+  var reporta = document.getElementById("aj-reporta").value;
+  fetch("/api/orders/"+ajusteOid+"/ajuste",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({descripcion:desc,duracion:dur,reporta:reporta})})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ loadOrders(); closeModal(); })
+    .catch(function(e){ alert("Error: "+e.message); });
+}
+document.getElementById("modal").addEventListener("click", function(e){
+  if(e.target.id==="modal") closeModal();
 });
 
-function showStatusBar(msg, ok) {
-  const bar=document.getElementById("status-bar");
-  bar.style.display="flex";
-  bar.style.background=ok?"#052E16":"#450A0A";
-  bar.style.color=ok?"#6EE7B7":"#FCA5A5";
-  bar.style.borderBottom="1px solid #334155";
-  bar.innerHTML=`<span>${msg}</span><span style="cursor:pointer;color:#64748B" onclick="this.parentElement.style.display='none'">✕</span>`;
+// ============ REPORTE ============
+function limpiarFiltros(){
+  var ids = ["f-fil-op","f-fil-maq","f-fil-tur","f-fil-est"];
+  for(var i=0;i<ids.length;i++){ var e=document.getElementById(ids[i]); if(e) e.value=""; }
+  renderReporte();
 }
 
-// ── Load catalog on start ──
-async function loadCatalog() {
-  try{
-    const r=await fetch("/api/catalog");
-    const d=await r.json();
-    catalog=d.catalog||[];
-  }catch(e){}
+function getFilteredOrders(){
+  var fOp = (document.getElementById("f-fil-op")||{}).value || "";
+  var fMaq = (document.getElementById("f-fil-maq")||{}).value || "";
+  var fTur = (document.getElementById("f-fil-tur")||{}).value || "";
+  var fEst = (document.getElementById("f-fil-est")||{}).value || "";
+  var out = [];
+  for(var i=0;i<orders.length;i++){
+    var o=orders[i];
+    if(fOp && o.operario!==fOp) continue;
+    if(fMaq && o.maquina!==fMaq) continue;
+    if(fEst && o.status!==fEst) continue;
+    if(fTur){
+      var fa = (o.history && o.history.length>0) ? o.history[0].at : o.createdAt;
+      if(getTurno(fa)!==fTur) continue;
+    }
+    out.push(o);
+  }
+  return out;
 }
 
-// ═══════════════════════════════════════════════
-// REPORTE
-// ═══════════════════════════════════════════════
-function renderReporte() {
-  try {
-  const el = document.getElementById("view-reporte");
-  if(!el) { setTimeout(renderReporte, 150); return; }
-  if(el.style.display==="none") { return; }
-  const todas = [...orders];
-  if(todas.length===0){
-    document.getElementById("view-reporte").innerHTML=`<div class="card" style="padding:60px;text-align:center">
-      <div style="font-size:48px;margin-bottom:16px">📈</div>
-      <div style="font-size:18px;font-weight:600;color:#94A3B8;margin-bottom:8px">Sin órdenes registradas</div>
-      <div style="color:#475569">Crea órdenes de producción para ver el reporte</div></div>`;
+function renderReporte(){
+  var el = document.getElementById("view-reporte");
+  if(!el) return;
+
+  if(orders.length===0){
+    el.innerHTML = '<div class="card" style="padding:60px;text-align:center"><div style="font-size:48px;margin-bottom:16px">📈</div><div style="font-size:18px;font-weight:600;color:#94A3B8;margin-bottom:8px">Sin órdenes registradas</div><div style="color:#475569">Crea órdenes de producción para ver el reporte</div></div>';
     return;
   }
 
-  // Read active filters
-  const fOp  = document.getElementById("f-fil-op")?.value  || "";
-  const fMaq = document.getElementById("f-fil-maq")?.value || "";
-  const fTur = document.getElementById("f-fil-tur")?.value || "";
-  const fEst = document.getElementById("f-fil-est")?.value || "";
+  var filtered = getFilteredOrders();
 
-  let filtered = todas.filter(o=>{
-    if(fOp  && o.operario!==fOp)  return false;
-    if(fMaq && o.maquina!==fMaq)  return false;
-    if(fEst && o.status!==fEst)   return false;
-    if(fTur){
-      const firstAt=o.history&&o.history.length>0?o.history[0].at:o.createdAt;
-      if(getTurno(firstAt)!==fTur) return false;
-    }
-    return true;
-  });
+  var totalFin=0, totalAct=0, totalMetros=0, velSum=0, velCount=0;
+  for(var i=0;i<filtered.length;i++){
+    var o=filtered[i];
+    if(o.status==="finalizada") totalFin++; else totalAct++;
+    totalMetros += Number(o.metros||0);
+    if(Number(o.velocidadObjetivo)>0){ velSum += (Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100; velCount++; }
+  }
+  var avgEfic = velCount>0 ? velSum/velCount : 0;
 
-  // KPIs del filtered set
-  const totalFin  = filtered.filter(o=>o.status==="finalizada").length;
-  const totalAct  = filtered.filter(o=>o.status!=="finalizada").length;
-  const totalMetros = filtered.reduce((s,o)=>s+Number(o.metros||0),0);
-  const withVel   = filtered.filter(o=>Number(o.velocidadObjetivo)>0);
-  const avgEfic   = withVel.length>0
-    ? withVel.reduce((s,o)=>s+(Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100,0)/withVel.length : 0;
+  var operariosSet = {};
+  for(var oi=0;oi<orders.length;oi++){ if(orders[oi].operario) operariosSet[orders[oi].operario]=true; }
+  var operariosList = Object.keys(operariosSet);
 
-  const operarios = [...new Set(todas.filter(o=>o.operario).map(o=>o.operario))];
-  const maquinas  = MACHINES;
-  const turnos    = ["T1 (06:00-14:00)","T2 (14:00-22:00)","T3 (22:00-06:00)"];
-  const estados   = Object.entries(STATUS_CONFIG).map(([k,v])=>({k,l:v.label}));
+  var fOpVal = (document.getElementById("f-fil-op")||{}).value || "";
+  var fMaqVal = (document.getElementById("f-fil-maq")||{}).value || "";
+  var fTurVal = (document.getElementById("f-fil-tur")||{}).value || "";
+  var fEstVal = (document.getElementById("f-fil-est")||{}).value || "";
 
-  // Pre-build filter options to avoid nested template literals
-  const opOpts   = operarios.map(op=>'<option value="'+op+'" '+(fOp===op?'selected':'')+'>'+op.split(" ").slice(0,2).join(" ")+'</option>').join("");
-  const maqOpts  = maquinas.map(m=>'<option value="'+m+'" '+(fMaq===m?'selected':'')+'>'+m+'</option>').join("");
-  const turOpts  = turnos.map(t=>'<option value="'+t+'" '+(fTur===t?'selected':'')+'>'+t+'</option>').join("");
-  const estOpts  = estados.map(e=>'<option value="'+e.k+'" '+(fEst===e.k?'selected':'')+'>'+e.l+'</option>').join("");
-  const kpiData  = [
-    {l:"Finalizadas", v:totalFin, c:"#10B981", sub:"órdenes completadas"},
-    {l:"En Proceso",  v:totalAct, c:"#F59E0B", sub:"órdenes activas"},
-    {l:"Metros Tot.", v:totalMetros.toLocaleString("es-CO"), c:"#3B82F6", sub:"metros lineales"},
-    {l:"Eficiencia",  v:avgEfic>0?avgEfic.toFixed(0)+"%":"—", c:avgEfic>0?velColor(avgEfic):"#475569", sub:"vel.real ÷ vel.obj × 100"},
+  var opOpts = '<option value="">Todos</option>';
+  for(var k=0;k<operariosList.length;k++){
+    var op=operariosList[k];
+    opOpts += '<option value="'+escHtml(op)+'" '+(fOpVal===op?'selected':'')+'>'+escHtml(op.split(" ").slice(0,2).join(" "))+'</option>';
+  }
+  var maqOpts = '<option value="">Todas</option>';
+  for(var mi=0;mi<MACHINES.length;mi++){
+    maqOpts += '<option value="'+MACHINES[mi]+'" '+(fMaqVal===MACHINES[mi]?'selected':'')+'>'+MACHINES[mi]+'</option>';
+  }
+  var turnos = ["T1 (06:00-14:00)","T2 (14:00-22:00)","T3 (22:00-06:00)"];
+  var turOpts = '<option value="">Todos</option>';
+  for(var ti=0;ti<turnos.length;ti++){
+    turOpts += '<option value="'+turnos[ti]+'" '+(fTurVal===turnos[ti]?'selected':'')+'>'+turnos[ti]+'</option>';
+  }
+  var estOpts = '<option value="">Todos</option>';
+  for(var ei=0;ei<STATUS_KEYS.length;ei++){
+    var ek=STATUS_KEYS[ei];
+    estOpts += '<option value="'+ek+'" '+(fEstVal===ek?'selected':'')+'>'+STATUS_CFG[ek].label+'</option>';
+  }
+
+  var limpiarBtn = filtered.length<orders.length
+    ? '<button onclick="limpiarFiltros()" style="margin-left:8px;padding:2px 8px;font-size:11px;background:#334155;color:#94A3B8;border:none;border-radius:4px;cursor:pointer">✕ Limpiar</button>'
+    : "";
+
+  var parts = [];
+  parts.push('<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:12px"><h2 style="font-size:20px;font-weight:700">📈 Reporte de Producción</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="exportReporte(\'csv\')" style="padding:8px 14px;background:#10B981;color:#fff;font-size:12px">⬇️ CSV</button><button class="btn" onclick="exportReporte(\'excel\')" style="padding:8px 14px;background:#1D4ED8;color:#fff;font-size:12px">⬇️ Excel</button><button class="btn" onclick="window.print()" style="padding:8px 14px;background:#4C1D95;color:#fff;font-size:12px">🖨️ PDF</button></div></div>');
+
+  parts.push('<div class="card" style="padding:16px;margin-bottom:20px"><div style="font-size:12px;color:#64748B;margin-bottom:10px;font-weight:600">🔍 FILTROS</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">'+
+    '<div><label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">Operario</label><select id="f-fil-op" class="inp" style="font-size:12px;padding:7px 10px" onchange="renderReporte()">'+opOpts+'</select></div>'+
+    '<div><label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">Máquina</label><select id="f-fil-maq" class="inp" style="font-size:12px;padding:7px 10px" onchange="renderReporte()">'+maqOpts+'</select></div>'+
+    '<div><label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">Turno</label><select id="f-fil-tur" class="inp" style="font-size:12px;padding:7px 10px" onchange="renderReporte()">'+turOpts+'</select></div>'+
+    '<div><label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">Estado</label><select id="f-fil-est" class="inp" style="font-size:12px;padding:7px 10px" onchange="renderReporte()">'+estOpts+'</select></div>'+
+    '</div><div style="font-size:11px;color:#475569;margin-top:10px">Mostrando <strong style="color:#E2E8F0">'+filtered.length+'</strong> de '+orders.length+' órdenes'+limpiarBtn+'</div></div>');
+
+  var kpis = [
+    {l:"Finalizadas", v:totalFin, c:"#10B981", s:"órdenes completadas"},
+    {l:"En Proceso", v:totalAct, c:"#F59E0B", s:"órdenes activas"},
+    {l:"Metros Tot.", v:totalMetros.toLocaleString("es-CO"), c:"#3B82F6", s:"metros lineales"},
+    {l:"Eficiencia", v:(avgEfic>0?avgEfic.toFixed(0)+"%":"—"), c:(avgEfic>0?velColor(avgEfic):"#475569"), s:"vel.real ÷ vel.obj × 100"}
   ];
-  const kpiHtml = kpiData.map(k=>'<div class="card" style="padding:16px"><div style="font-size:11px;color:#64748B;margin-bottom:4px">'+k.l+'</div><div style="font-size:26px;font-weight:700;color:'+k.c+';font-family:JetBrains Mono,monospace">'+k.v+'</div><div style="font-size:10px;color:#475569;margin-top:4px">'+k.sub+'</div></div>').join("");
-  const limpiarBtn = filtered.length<todas.length ? '<button onclick="limpiarFiltros()" style="margin-left:8px;padding:2px 8px;font-size:11px;background:#334155;color:#94A3B8;border:none;border-radius:4px;cursor:pointer">✕ Limpiar</button>' : "";
+  parts.push('<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">');
+  for(var kp=0;kp<kpis.length;kp++){
+    var kk=kpis[kp];
+    parts.push('<div class="card" style="padding:16px"><div style="font-size:11px;color:#64748B;margin-bottom:4px">'+kk.l+'</div><div style="font-size:26px;font-weight:700;color:'+kk.c+';font-family:monospace">'+kk.v+'</div><div style="font-size:10px;color:#475569;margin-top:4px">'+kk.s+'</div></div>');
+  }
+  parts.push('</div>');
 
-  let html = `
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-    <h2 style="font-size:20px;font-weight:700">📈 Reporte de Producción</h2>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn" onclick="exportReporte('csv')"   style="padding:8px 14px;background:#10B981;color:#fff;font-size:12px">⬇️ CSV</button>
-      <button class="btn" onclick="exportReporte('excel')" style="padding:8px 14px;background:#1D4ED8;color:#fff;font-size:12px">⬇️ Excel</button>
-      <button class="btn" onclick="window.print()"         style="padding:8px 14px;background:#4C1D95;color:#fff;font-size:12px">🖨️ PDF</button>
-    </div>
-  </div>
+  parts.push('<div style="background:#1E1B4B;border:1px solid #4C1D95;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:12px"><span style="color:#A78BFA;font-weight:600">📐 Fórmula de Eficiencia: </span><span style="color:#C4B5FD;font-family:monospace"> (Velocidad Real ÷ Velocidad Objetivo) × 100</span><span style="color:#6D28D9;margin-left:8px">· Verde ≥90% · Amarillo ≥70% · Rojo &lt;70%</span></div>');
 
-  <div class="card" style="padding:16px;margin-bottom:20px">
-    <div style="font-size:12px;color:#64748B;margin-bottom:10px;font-weight:600">🔍 FILTROS</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
-      <div>
-        <label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">Operario</label>
-        <select id="f-fil-op" class="inp" style="font-size:12px;padding:7px 10px" onchange="renderReporte()">
-          <option value="">Todos</option>
-          ${opOpts}
-        </select>
-      </div>
-      <div>
-        <label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">Máquina</label>
-        <select id="f-fil-maq" class="inp" style="font-size:12px;padding:7px 10px" onchange="renderReporte()">
-          <option value="">Todas</option>
-          ${maqOpts}
-        </select>
-      </div>
-      <div>
-        <label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">Turno</label>
-        <select id="f-fil-tur" class="inp" style="font-size:12px;padding:7px 10px" onchange="renderReporte()">
-          <option value="">Todos</option>
-          ${turOpts}
-        </select>
-      </div>
-      <div>
-        <label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">Estado</label>
-        <select id="f-fil-est" class="inp" style="font-size:12px;padding:7px 10px" onchange="renderReporte()">
-          <option value="">Todos</option>
-          ${estOpts}
-        </select>
-      </div>
-    </div>
-    <div style="font-size:11px;color:#475569;margin-top:10px">
-      Mostrando <strong style="color:#E2E8F0">${filtered.length}</strong> de ${todas.length} órdenes
-      ${limpiarBtn}
-    </div>
-  </div>
-
-  <div style="display:grid;grid-template-columns:repeat(4,1fr)gap:14px;margin-bottom:20px">
-    ${kpiHtml}
-  </div>
-
-  <!-- FÓRMULA EFICIENCIA -->
-  <div style="background:#1E1B4B;border:1px solid #4C1D95;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:12px">
-    <span style="color:#A78BFA;font-weight:600">📐 Fórmula de Eficiencia: </span>
-    <span style="color:#C4B5FD;font-family:'JetBrains Mono',monospace"> Eficiencia (%) = (Velocidad Real ÷ Velocidad Objetivo) × 100</span>
-    <span style="color:#6D28D9;margin-left:8px">· Verde ≥90% · Amarillo ≥70% · Rojo &lt;70%</span>
-  </div>`;
-
-  // TABLE
   if(filtered.length===0){
-    html+=`<div class="card" style="padding:40px;text-align:center;color:#475569">Sin órdenes con los filtros seleccionados</div>`;
+    parts.push('<div class="card" style="padding:40px;text-align:center;color:#475569">Sin órdenes con los filtros seleccionados</div>');
   } else {
-    html+=`<div class="card" style="overflow:auto"><table class="tbl">
-      <thead><tr>
-        <th>Orden</th><th>Producto</th><th>Cliente</th><th>Máquina</th><th>Operario</th>
-        <th>Turno</th><th>Fecha</th><th>Estado</th>
-        <th>T.Montaje</th><th>T.Ajuste</th><th>T.Producción</th><th>T.Total</th>
-        <th>Metros</th><th>Vel.Obj</th><th>Vel.Real</th><th>Efic.</th><th>Novedades</th>
-      </tr></thead><tbody>`;
-
-    filtered.forEach((o,i)=>{
-      const t=computeTimes(o);
-      const tTotal=(t.tSetup||0)+(t.tAjuste||0)+(t.tProduccion||0)+(t.tFinalizada||0);
-      const vp=Number(o.velocidadObjetivo)>0?((Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100).toFixed(0):"—";
-      const cfg=STATUS_CONFIG[o.status]||STATUS_CONFIG.setup;
-      const firstAt=o.history&&o.history.length>0?o.history[0].at:o.createdAt;
-      html+=`<tr style="background:${i%2?"#0F172A18":"transparent"}">
-        <td style="font-family:'JetBrains Mono',monospace;color:#94A3B8;white-space:nowrap">${o.ordenId}</td>
-        <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#E2E8F0;font-weight:600" title="${o.producto}">${o.producto}</td>
-        <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#94A3B8;font-size:11px" title="${o.cliente||''}">${o.cliente||"—"}</td>
-        <td style="color:#8B5CF6;font-size:11px;white-space:nowrap">${o.maquina||"—"}</td>
-        <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#10B981;font-size:11px" title="${o.operario||''}">${o.operario?o.operario.split(" ").slice(0,2).join(" "):"—"}</td>
-        <td style="font-size:11px;color:#64748B;white-space:nowrap">${o.turno||getTurno(firstAt)}</td>
-        <td style="font-size:11px;color:#64748B;white-space:nowrap">${getFechaCol(firstAt)}</td>
-        <td><span class="badge" style="background:${cfg.bg};color:${cfg.color};white-space:nowrap;font-size:10px">${cfg.icon} ${cfg.label}</span></td>
-        <td style="font-family:'JetBrains Mono',monospace;color:#F59E0B;font-size:11px;white-space:nowrap">${fmtTime(t.tSetup)}</td>
-        <td style="font-family:'JetBrains Mono',monospace;color:#8B5CF6;font-size:11px;white-space:nowrap">${fmtTime(t.tAjuste)}</td>
-        <td style="font-family:'JetBrains Mono',monospace;color:#3B82F6;font-size:11px;white-space:nowrap">${fmtTime(t.tProduccion)}</td>
-        <td style="font-family:'JetBrains Mono',monospace;color:#E2E8F0;font-size:11px;font-weight:600;white-space:nowrap">${fmtTime(tTotal)}</td>
-        <td style="font-family:'JetBrains Mono',monospace;color:#64748B;font-size:11px">${Number(o.metros||0).toLocaleString("es-CO")}</td>
-        <td style="font-family:'JetBrains Mono',monospace;color:#64748B;font-size:11px">${o.velocidadObjetivo||0}</td>
-        <td style="font-family:'JetBrains Mono',monospace;color:#64748B;font-size:11px">${o.velocidadActual||0}</td>
-        <td style="font-weight:700;font-size:12px;white-space:nowrap;color:${vp!=="—"?velColor(Number(vp)):"#475569"}">${vp!=="—"?vp+"%":"—"}</td>
-        <td style="font-size:11px;color:#64748B">${(o.ajustes||[]).length} nov.</td>
-      </tr>`;
-    });
-    html+=`</tbody></table></div>`;
+    parts.push('<div class="card" style="overflow:auto"><table class="tbl"><thead><tr><th>Orden</th><th>Producto</th><th>Cliente</th><th>Máquina</th><th>Operario</th><th>Turno</th><th>Fecha</th><th>Estado</th><th>Montaje</th><th>Ajuste</th><th>Producción</th><th>Metros</th><th>Vel.Obj</th><th>Vel.Real</th><th>Efic.</th><th>Nov.</th></tr></thead><tbody>');
+    for(var fi=0;fi<filtered.length;fi++){
+      var fo=filtered[fi];
+      var t=computeTimes(fo);
+      var vp = Number(fo.velocidadObjetivo)>0 ? ((Number(fo.velocidadActual)/Number(fo.velocidadObjetivo))*100).toFixed(0) : "—";
+      var fa = (fo.history && fo.history.length>0) ? fo.history[0].at : fo.createdAt;
+      parts.push('<tr style="background:'+(fi%2?"#0F172A18":"transparent")+'">'+
+        '<td style="font-family:monospace;color:#94A3B8">'+escHtml(fo.ordenId)+'</td>'+
+        '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#E2E8F0;font-weight:600">'+escHtml(fo.producto)+'</td>'+
+        '<td style="font-size:11px;color:#94A3B8">'+escHtml(fo.cliente||"—")+'</td>'+
+        '<td style="color:#8B5CF6;font-size:11px">'+escHtml(fo.maquina||"—")+'</td>'+
+        '<td style="font-size:11px;color:#10B981">'+escHtml(fo.operario?fo.operario.split(" ").slice(0,2).join(" "):"—")+'</td>'+
+        '<td style="font-size:11px;color:#64748B">'+(fo.turno||getTurno(fa))+'</td>'+
+        '<td style="font-size:11px;color:#64748B">'+getFechaCol(fa)+'</td>'+
+        '<td>'+badgeHtml(fo.status)+'</td>'+
+        '<td style="font-family:monospace;color:#F59E0B;font-size:11px">'+fmtTime(t.tSetup)+'</td>'+
+        '<td style="font-family:monospace;color:#8B5CF6;font-size:11px">'+fmtTime(t.tAjuste)+'</td>'+
+        '<td style="font-family:monospace;color:#3B82F6;font-size:11px">'+fmtTime(t.tProduccion)+'</td>'+
+        '<td style="font-family:monospace;color:#64748B;font-size:11px">'+Number(fo.metros||0).toLocaleString("es-CO")+'</td>'+
+        '<td style="font-family:monospace;color:#64748B;font-size:11px">'+(fo.velocidadObjetivo||0)+'</td>'+
+        '<td style="font-family:monospace;color:#64748B;font-size:11px">'+(fo.velocidadActual||0)+'</td>'+
+        '<td style="font-weight:700;font-size:12px;color:'+(vp!=="—"?velColor(Number(vp)):"#475569")+'">'+(vp!=="—"?vp+"%":"—")+'</td>'+
+        '<td style="font-size:11px;color:#64748B">'+(fo.ajustes||[]).length+'</td>'+
+      '</tr>');
+    }
+    parts.push('</tbody></table></div>');
   }
-  const reporteEl = document.getElementById("view-reporte");
-  if(reporteEl) reporteEl.innerHTML=html;
-  } catch(err) {
-    const el=document.getElementById("view-reporte");
-    if(el) el.innerHTML=`<div class="card" style="padding:40px;text-align:center;color:#FCA5A5">
-      <div style="font-size:32px;margin-bottom:12px">⚠️</div>
-      <div style="font-size:14px;font-weight:600;margin-bottom:8px">Error al cargar el reporte</div>
-      <div style="font-size:12px;color:#64748B;font-family:monospace">${err.message}</div>
-      <button onclick="renderReporte()" style="margin-top:16px;padding:8px 20px;background:#3B82F6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px">🔄 Reintentar</button>
-    </div>`;
-    console.error("renderReporte error:", err);
+  el.innerHTML = parts.join("");
+}
+
+function exportReporte(fmt){
+  var filtered = getFilteredOrders();
+  var rows = [["Orden","Producto","Cliente","Máquina","Operario","Turno","Fecha","Estado","T.Montaje","T.Ajuste","T.Producción","Metros","Vel.Objetivo","Vel.Real","Eficiencia%","Novedades"]];
+  for(var i=0;i<filtered.length;i++){
+    var o=filtered[i];
+    var t=computeTimes(o);
+    var vp = Number(o.velocidadObjetivo)>0 ? ((Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100).toFixed(1) : "";
+    var fa = (o.history && o.history.length>0) ? o.history[0].at : o.createdAt;
+    var novStr = (o.ajustes||[]).map(function(a){ return a.descripcion+(a.reporta?" ["+a.reporta+"]":"")+(a.duracion?" ("+a.duracion+"min)":""); }).join(" | ");
+    rows.push([o.ordenId, o.producto, o.cliente||"", o.maquina||"", o.operario||"", o.turno||getTurno(fa), getFechaCol(fa), STATUS_CFG[o.status]?STATUS_CFG[o.status].label:o.status, fmtTime(t.tSetup), fmtTime(t.tAjuste), fmtTime(t.tProduccion), Number(o.metros||0), o.velocidadObjetivo||0, o.velocidadActual||0, vp?vp+"%":"—", novStr||"—"]);
   }
-}
-
-function limpiarFiltros(){
-  ["f-fil-op","f-fil-maq","f-fil-tur","f-fil-est"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
-  renderReporte();
-}
-function buildReporteRows(){
-  // Apply same filters as renderReporte
-  const fOp  = document.getElementById("f-fil-op")?.value  || "";
-  const fMaq = document.getElementById("f-fil-maq")?.value || "";
-  const fTur = document.getElementById("f-fil-tur")?.value || "";
-  const fEst = document.getElementById("f-fil-est")?.value || "";
-  const source = orders.filter(o=>{
-    if(fOp  && o.operario!==fOp)  return false;
-    if(fMaq && o.maquina!==fMaq)  return false;
-    if(fEst && o.status!==fEst)   return false;
-    if(fTur){const fa=o.history&&o.history.length>0?o.history[0].at:o.createdAt;if(getTurno(fa)!==fTur)return false;}
-    return true;
-  });
-  const rows=[["Orden","Producto","Cliente","Máquina","Operario","Turno","Fecha","Estado",
-    "T.Montaje","T.Ajuste","T.Producción","T.Total",
-    "Metros","Vel.Objetivo","Vel.Real","Eficiencia%",
-    "Cant.Novedades","Detalle Novedades","Historial Estados"]];
-  source.forEach(o=>{
-    const t=computeTimes(o);
-    const tTotal=(t.tSetup||0)+(t.tAjuste||0)+(t.tProduccion||0)+(t.tFinalizada||0);
-    const vp=Number(o.velocidadObjetivo)>0?((Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100).toFixed(1):"";
-    const firstAt=o.history&&o.history.length>0?o.history[0].at:o.createdAt;
-    const histStr=(o.history||[]).map(h=>`${STATUS_CONFIG[h.status]?.label||h.status} @ ${fmtDT(h.at)}`).join(" → ");
-    const novStr=(o.ajustes||[]).map(a=>`${a.descripcion}${a.reporta?" ["+a.reporta+"]":""}${a.duracion?" ("+a.duracion+"min)":""}`).join(" | ");
-    rows.push([
-      o.ordenId, o.producto, o.cliente||"", o.maquina||"", o.operario||"",
-      o.turno||getTurno(firstAt), getFechaCol(firstAt), STATUS_CONFIG[o.status]?.label||o.status,
-      fmtTime(t.tSetup), fmtTime(t.tAjuste), fmtTime(t.tProduccion), fmtTime(tTotal),
-      Number(o.metros||0), o.velocidadObjetivo||0, o.velocidadActual||0, vp?vp+"%":"—",
-      (o.ajustes||[]).length, novStr||"—", histStr,
-    ]);
-  });
-  return rows;
-}
-
-function exportReporte(fmt) {
-  const rows=buildReporteRows();
-  const fecha=new Date().toISOString().slice(0,10);
-
-  if(fmt==="excel") {
-    // Build HTML table that Excel can open
-    let html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">';
-    html+='<head><meta charset="UTF-8"><style>th{background:#1e3a5f;color:#fff;padding:6px}td{padding:5px;border:1px solid #ccc}</style></head><body>';
-    html+='<table border="1">';
-    rows.forEach((row,i)=>{
-      html+='<tr>';
-      row.forEach(cell=>{
-        const tag=i===0?'th':'td';
-        html+=`<${tag}>${String(cell).replace(/&/g,'&amp;').replace(/</g,'&lt;')}</${tag}>`;
-      });
-      html+='</tr>';
-    });
-    html+='</table></body></html>';
-    const blob=new Blob([html],{type:"application/vnd.ms-excel;charset=utf-8"});
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(blob);
-    a.download=`reporte-produccion-${fecha}.xls`;
+  var fecha = new Date().toISOString().slice(0,10);
+  if(fmt==="excel"){
+    var html = '<html><head><meta charset="UTF-8"></head><body><table border="1">';
+    for(var r=0;r<rows.length;r++){
+      html += '<tr>';
+      for(var c=0;c<rows[r].length;c++){
+        var tag = r===0 ? 'th' : 'td';
+        html += '<'+tag+'>'+String(rows[r][c]).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</'+tag+'>';
+      }
+      html += '</tr>';
+    }
+    html += '</table></body></html>';
+    var blob = new Blob([html],{type:"application/vnd.ms-excel;charset=utf-8"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "reporte-produccion-"+fecha+".xls";
     a.click();
   } else {
-    // CSV with BOM for Excel spanish locale
-    const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";")).join("\n");
-    const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(blob);
-    a.download=`reporte-produccion-${fecha}.csv`;
-    a.click();
+    var csv = rows.map(function(r){ return r.map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(";"); }).join("\\n");
+    var blob2 = new Blob(["\\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
+    var a2 = document.createElement("a");
+    a2.href = URL.createObjectURL(blob2);
+    a2.download = "reporte-produccion-"+fecha+".csv";
+    a2.click();
   }
 }
 
-// ═══════════════════════════════════════════════
-// RESET
-// ═══════════════════════════════════════════════
-async function confirmReset() {
+// ============ EXCEL UPLOAD ============
+document.getElementById("excel-input").addEventListener("change", function(e){
+  var file = e.target.files[0];
+  if(!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    try {
+      var wb = XLSX.read(ev.target.result, {type:"binary"});
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, {defval:""});
+      var normalize = function(s){
+        return String(s).toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g,"");
+      };
+      var MAQ_CAT = MACHINES;
+      var mapped = [];
+      for(var i=0;i<rows.length;i++){
+        var row = rows[i];
+        var norm = {};
+        for(var key in row){ norm[normalize(key)] = row[key]; }
+        var ordenId = String(norm["ordendeproduccionordendeproduccionnumber"]||norm["ordendeproduccionordendeproductionnumber"]||norm["orden"]||norm["norden"]||norm["id"]||"").trim();
+        if(!ordenId) continue;
+        var producto = String(norm["produccionreferencia"]||norm["referencia"]||norm["producto"]||norm["descripcion"]||"").trim();
+        var cliente = String(norm["produccionorganizacion"]||norm["organizacion"]||norm["cliente"]||"").trim();
+        var cantidad = Number(norm["ordendeproducciontotaletiquetas"]||norm["totaletiquetas"]||norm["cantidad"]||0);
+        var metros = Number(norm["ordendeproducciontotalmtslineales"]||norm["totalmtslineales"]||norm["metros"]||0);
+        var rawMaq = String(norm["ordendeproduccioncentrodeproceso"]||norm["centrodeproceso"]||norm["maquina"]||"").split(",")[0].trim();
+        var maquina = rawMaq;
+        for(var mc=0;mc<MAQ_CAT.length;mc++){
+          if(normalize(rawMaq).indexOf(normalize(MAQ_CAT[mc]))>=0){ maquina=MAQ_CAT[mc]; break; }
+        }
+        mapped.push({ordenId:ordenId, producto:producto, cliente:cliente, cantidad:cantidad, metros:metros, maquina:maquina});
+      }
+      fetch("/api/catalog",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({rows:mapped})})
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          catalog = mapped;
+          showStatusBar("✅ "+mapped.length+" órdenes cargadas desde \"" + file.name + "\"", true);
+        })
+        .catch(function(e){ showStatusBar("❌ Error guardando el catálogo: "+e.message, false); });
+    } catch(err){
+      showStatusBar("❌ Error leyendo el archivo. Verifica que sea .xlsx válido.", false);
+    }
+  };
+  reader.readAsBinaryString(file);
+  e.target.value = "";
+});
+
+function showStatusBar(msg, ok){
+  var bar = document.getElementById("status-bar");
+  bar.style.display = "flex";
+  bar.style.justifyContent = "space-between";
+  bar.style.background = ok ? "#052E16" : "#450A0A";
+  bar.style.color = ok ? "#6EE7B7" : "#FCA5A5";
+  bar.style.borderBottom = "1px solid #334155";
+  bar.innerHTML = '<span>'+msg+'</span><span style="cursor:pointer;color:#64748B" onclick="this.parentElement.style.display=\'none\'">✕</span>';
+}
+
+// ============ RESET ============
+function confirmReset(){
   if(!confirm("⚠️ ¿Borrar TODAS las órdenes? Esta acción no se puede deshacer.")) return;
-  const r = await fetch("/api/reset", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({secret:"coditeq2024"})
-  });
-  const d = await r.json();
-  if(d.ok) showStatusBar("✅ Todas las órdenes eliminadas", true);
-  else     showStatusBar("❌ Error: " + d.error, false);
+  fetch("/api/reset",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({secret:"coditeq2024"})})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.ok){ showStatusBar("✅ Todas las órdenes eliminadas",true); loadOrders(); }
+      else showStatusBar("❌ Error: "+d.error, false);
+    })
+    .catch(function(e){ showStatusBar("❌ Error: "+e.message, false); });
 }
 
-// ═══════════════════════════════════════════════
-// BOOT
-// ═══════════════════════════════════════════════
-connectSSE();
+// ============ DATA LOADING ============
+function loadOrders(){
+  fetch("/api/orders")
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      orders = d.orders || [];
+      document.getElementById("conn-label").textContent = "en vivo";
+      document.getElementById("conn-label").style.color = "#10B981";
+      renderView(curView);
+    })
+    .catch(function(e){
+      document.getElementById("conn-label").textContent = "reconectando…";
+      document.getElementById("conn-label").style.color = "#EF4444";
+    });
+}
+function loadCatalog(){
+  fetch("/api/catalog")
+    .then(function(r){ return r.json(); })
+    .then(function(d){ catalog = d.catalog || []; })
+    .catch(function(e){});
+}
+
+// ============ BOOT ============
+loadOrders();
 loadCatalog();
-startTick();
-renderCurrent();
-// Keep server alive — ping every 10 minutes
-setInterval(()=>{ fetch("/ping").catch(()=>{}); }, 10 * 60 * 1000);
+setInterval(loadOrders, 5000);
+setInterval(function(){ renderView(curView); }, 1000); // live timers
+setInterval(function(){ fetch("/ping").catch(function(){}); }, 10*60*1000); // keepalive
 </script>
 </body>
 </html>
