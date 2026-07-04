@@ -48,6 +48,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0F172A;color:#E2E8F0;mi
     <button class="btn" onclick="document.getElementById('excel-input').click()" style="padding:6px 12px;font-size:12px;background:#064E3B;color:#6EE7B7">📂 Subir Excel</button>
     <input type="file" id="import-input" accept=".xls,.xlsx,.html,.htm" style="display:none"/>
     <button class="btn" onclick="document.getElementById('import-input').click()" style="padding:6px 12px;font-size:12px;background:#1D4ED8;color:#93C5FD">📥 Importar Historial</button>
+    <button class="btn" onclick="exportarTurno()" style="padding:6px 12px;font-size:12px;background:#065F46;color:#6EE7B7">💾 Exportar Turno</button>
     <button class="btn" onclick="confirmReset()" style="padding:6px 12px;font-size:12px;background:#7F1D1D;color:#FCA5A5">🗑️ Reset</button>
     <button class="nav-btn active" id="nav-dashboard" onclick="setView('dashboard')">📊 Dashboard</button>
     <button class="nav-btn" id="nav-maquinas" onclick="setView('maquinas')">🖥️ Por Máquina</button>
@@ -579,6 +580,86 @@ function renderDetalle(){
 }
 
 // ============ API ACTIONS ============
+function getCurrentTurno(){
+  var h = new Date(new Date().getTime() - 5*3600*1000).getUTCHours();
+  if(h>=6 && h<14) return "T1 (06:00-14:00)";
+  if(h>=14 && h<22) return "T2 (14:00-22:00)";
+  return "T3 (22:00-06:00)";
+}
+
+function checkAutoExport(){
+  // Check if all orders of the current turno are now finalizada
+  var turnoActual = getCurrentTurno();
+  var turnoOrders = orders.filter(function(o){
+    return o.turno === turnoActual;
+  });
+  if(turnoOrders.length === 0) return;
+  var allFinalizada = turnoOrders.every(function(o){ return o.status === "finalizada"; });
+  if(allFinalizada && turnoOrders.length > 0){
+    setTimeout(function(){
+      if(confirm("✅ Todas las órdenes del "+turnoActual+" están finalizadas.\n\n¿Desea exportar el reporte del turno automáticamente?")){
+        exportarTurno();
+      }
+    }, 800);
+  }
+}
+
+function exportarTurno(){
+  var turnoActual = getCurrentTurno();
+  var fecha = new Date(new Date().getTime() - 5*3600*1000).toISOString().slice(0,10);
+  
+  // Filter by current turno
+  var turnoOrders = orders.filter(function(o){ return o.turno === turnoActual; });
+  if(turnoOrders.length === 0){
+    // If no orders for current turno, export all finalized
+    turnoOrders = orders.filter(function(o){ return o.status === "finalizada"; });
+  }
+  if(turnoOrders.length === 0){
+    showStatusBar("⚠️ No hay órdenes para exportar en el turno actual.", false);
+    return;
+  }
+  
+  var rows = [["Orden","Producto","Cliente","Máquina","Operario","Turno","Fecha","Estado",
+               "T.Montaje","T.Ajuste","T.Producción","Metros","Vel.Objetivo","Vel.Real","Eficiencia%","Novedades"]];
+  
+  for(var i=0;i<turnoOrders.length;i++){
+    var o = turnoOrders[i];
+    var t = computeTimes(o);
+    var tTotal = (t.tSetup||0)+(t.tAjuste||0)+(t.tProduccion||0)+(t.tFinalizada||0);
+    var vp = Number(o.velocidadObjetivo)>0 ? ((Number(o.velocidadActual)/Number(o.velocidadObjetivo))*100).toFixed(1) : "";
+    var fa = (o.history && o.history.length>0) ? o.history[0].at : o.createdAt;
+    var novStr = (o.ajustes||[]).map(function(a){
+      return a.descripcion+(a.reporta?" ["+a.reporta+"]":"")+(a.duracion?" ("+a.duracion+"min)":"");
+    }).join(" | ");
+    rows.push([
+      o.ordenId, o.producto, o.cliente||"", o.maquina||"", o.operario||"",
+      o.turno||getTurno(fa), getFechaCol(fa), STATUS_CFG[o.status]?STATUS_CFG[o.status].label:o.status,
+      fmtTime(t.tSetup), fmtTime(t.tAjuste), fmtTime(t.tProduccion), Number(o.metros||0),
+      o.velocidadObjetivo||0, o.velocidadActual||0, vp?vp+"%":"—", novStr||"—"
+    ]);
+  }
+  
+  // Build HTML table (our import format - can be re-imported if needed)
+  var html = "<html><head><meta charset='UTF-8'></head><body><table border='1'>";
+  for(var r=0;r<rows.length;r++){
+    html += "<tr>";
+    for(var c=0;c<rows[r].length;c++){
+      var tag = r===0?"th":"td";
+      html += "<"+tag+">"+String(rows[r][c]).replace(/&/g,"&amp;").replace(/</g,"&lt;")+"</"+tag+">";
+    }
+    html += "</tr>";
+  }
+  html += "</table></body></html>";
+  
+  var blob = new Blob([html],{type:"application/vnd.ms-excel;charset=utf-8"});
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "reporte-"+turnoActual.replace(/[^A-Z0-9]/gi,"-")+"-"+fecha+".xls";
+  a.click();
+  
+  showStatusBar("✅ Reporte del "+turnoActual+" exportado: "+turnoOrders.length+" órdenes", true);
+}
+
 function patchStatus(id, status){
   var order = findOrder(id);
   if(order){
@@ -589,7 +670,12 @@ function patchStatus(id, status){
     renderView(curView);
   }
   fetch("/api/orders/"+id+"/status",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:status})})
-    .then(function(r){ if(!r.ok) console.error("patchStatus failed"); loadOrders(); })
+    .then(function(r){ if(!r.ok) console.error("patchStatus failed"); 
+      return loadOrders(); 
+    })
+    .then(function(){
+      if(status==="finalizada") checkAutoExport();
+    })
     .catch(function(e){ console.error(e); });
 }
 
@@ -876,40 +962,40 @@ document.getElementById("import-input").addEventListener("change", function(e){
     try {
       var content = ev.target.result;
       // Parse HTML table (our export format)
-      var parser = new DOMParser();
-      var doc2 = parser.parseFromString(content, "text/html");
-      var rows = doc2.querySelectorAll("table tr");
-      if(rows.length < 2){ showStatusBar("❌ No se encontraron datos en el archivo.", false); return; }
-      
-      var headers = [];
-      var headerCells = rows[0].querySelectorAll("th,td");
-      for(var h=0; h<headerCells.length; h++) headers.push(headerCells[h].textContent.trim());
-      
+      // Try to extract embedded JSON data first (v2 format with timestamps)
       var mapped = [];
-      for(var r=1; r<rows.length; r++){
-        var cells = rows[r].querySelectorAll("td,th");
-        if(cells.length < 8) continue;
-        var row = {};
-        for(var c=0; c<headers.length; c++){
-          row[headers[c]] = cells[c] ? cells[c].textContent.trim() : "";
+      var jsonMatch = content.match(/<!-- IMPORT_DATA:([\s\S]*?):END_IMPORT_DATA -->/);
+      if(jsonMatch){
+        try { mapped = JSON.parse(jsonMatch[1]); } catch(e){}
+      }
+      
+      // Fallback: parse HTML table (v1 format)
+      if(mapped.length === 0){
+        var parser = new DOMParser();
+        var doc2 = parser.parseFromString(content, "text/html");
+        var rows = doc2.querySelectorAll("table tr");
+        if(rows.length < 2){ showStatusBar("❌ No se encontraron datos en el archivo.", false); return; }
+        var headers = [];
+        var headerCells = rows[0].querySelectorAll("th,td");
+        for(var h=0; h<headerCells.length; h++) headers.push(headerCells[h].textContent.trim());
+        for(var r=1; r<rows.length; r++){
+          var cells = rows[r].querySelectorAll("td,th");
+          if(cells.length < 8) continue;
+          var row = {};
+          for(var c=0; c<headers.length; c++){
+            row[headers[c]] = cells[c] ? cells[c].textContent.trim() : "";
+          }
+          mapped.push({
+            ordenId: row["Orden"]||"", producto: row["Producto"]||"", cliente: row["Cliente"]||"",
+            maquina: row["Máquina"]||"", operario: row["Operario"]||"", turno: row["Turno"]||"",
+            fecha: row["Fecha"]||"", estado: row["Estado"]||"Finalizada",
+            metros: parseFloat(row["Metros"])||0,
+            velocidadObjetivo: parseFloat(row["Vel.Objetivo"])||0,
+            velocidadActual: parseFloat(row["Vel.Real"])||0,
+            tMontaje: row["T.Montaje"]||"", tAjuste: row["T.Ajuste"]||"",
+            tProduccion: row["T.Producción"]||"",
+          });
         }
-        // Map to our format
-        mapped.push({
-          ordenId:          row["Orden"]        || "",
-          producto:         row["Producto"]     || "",
-          cliente:          row["Cliente"]      || "",
-          maquina:          row["Máquina"]      || "",
-          operario:         row["Operario"]     || "",
-          turno:            row["Turno"]        || "",
-          fecha:            row["Fecha"]        || "",
-          estado:           row["Estado"]       || "Finalizada",
-          metros:           parseFloat(row["Metros"]) || 0,
-          velocidadObjetivo: parseFloat(row["Vel.Objetivo"]) || 0,
-          velocidadActual:  parseFloat(row["Vel.Real"]) || 0,
-          tMontaje:         row["T.Montaje"]    || "",
-          tAjuste:          row["T.Ajuste"]     || "",
-          tProduccion:      row["T.Producción"] || "",
-        });
       }
       
       if(mapped.length === 0){ showStatusBar("❌ No se encontraron órdenes válidas.", false); return; }
