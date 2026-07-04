@@ -285,6 +285,14 @@ def import_orders():
                 }
                 status = estado_map.get(row.get("estado", "Finalizada"), "finalizada")
                 
+                # Use reconstructed history if available (v2 format)
+                history = row.get("_history") or [
+                    {"status": "setup", "at": now},
+                    {"status": status, "at": now}
+                ]
+                created_at = row.get("_createdAt") or now
+                finalizada_at = row.get("_finalizadaAt") or (now if status == "finalizada" else None)
+                
                 order = {
                     "id": order_id,
                     "ordenId": str(row.get("ordenId", "")),
@@ -299,18 +307,12 @@ def import_orders():
                     "velocidadActual": float(row.get("velocidadActual", 0) or 0),
                     "notas": "Importado del reporte histórico",
                     "status": status,
-                    "createdAt": now,
-                    "finalizadaAt": now if status == "finalizada" else None,
+                    "createdAt": created_at,
+                    "finalizadaAt": finalizada_at,
                     "ajustes": [],
-                    "history": [
-                        {"status": "setup", "at": now},
-                        {"status": status, "at": now}
-                    ],
+                    "history": history,
                     "_imported": True,
                     "_importedDate": row.get("fecha", ""),
-                    "_tMontaje": str(row.get("tMontaje", "")),
-                    "_tAjuste": str(row.get("tAjuste", "")),
-                    "_tProduccion": str(row.get("tProduccion", "")),
                 }
                 
                 cur.execute(
