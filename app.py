@@ -331,5 +331,32 @@ def import_orders():
     
     return jsonify({"ok": True, "imported": imported, "errors": errors})
 
+
+@app.route("/api/fix/velocidad", methods=["POST"])
+def fix_velocidad():
+    """Set velocidadObjetivo=40 for all orders that have 0."""
+    secret = (request.json or {}).get("secret", "")
+    if secret != "coditeq2024":
+        return jsonify({"error": "unauthorized"}), 403
+    vel = float((request.json or {}).get("velocidad", 40))
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT id, data FROM orders WHERE (data->>'velocidadObjetivo')::float = 0 OR data->>'velocidadObjetivo' IS NULL")
+        rows = cur.fetchall()
+        updated = 0
+        for row in rows:
+            order = row["data"]
+            order["velocidadObjetivo"] = vel
+            cur.execute("UPDATE orders SET data=%s, updated_at=NOW() WHERE id=%s",
+                       (json.dumps(order), row["id"]))
+            updated += 1
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"ok": True, "updated": updated})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     app.run(debug=True, threaded=True, host="0.0.0.0", port=5000)
