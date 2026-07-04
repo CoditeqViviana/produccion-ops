@@ -255,5 +255,79 @@ def reset_orders():
         return jsonify({"error": str(e)}), 500
 
 
+
+@app.route("/api/import", methods=["POST"])
+def import_orders():
+    """Import historical orders from the downloaded report."""
+    secret = (request.json or {}).get("secret", "")
+    if secret != "coditeq2024":
+        return jsonify({"error": "unauthorized"}), 403
+    
+    rows = (request.json or {}).get("rows", [])
+    imported = 0
+    errors = []
+    
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        
+        for row in rows:
+            try:
+                order_id = str(uuid.uuid4())
+                now = datetime.utcnow().isoformat() + "Z"
+                
+                # Map estado label back to status key
+                estado_map = {
+                    "Finalizada": "finalizada",
+                    "Producción": "produccion", 
+                    "Montaje": "setup",
+                    "Ajuste": "ajuste"
+                }
+                status = estado_map.get(row.get("estado", "Finalizada"), "finalizada")
+                
+                order = {
+                    "id": order_id,
+                    "ordenId": str(row.get("ordenId", "")),
+                    "producto": str(row.get("producto", "")),
+                    "cliente": str(row.get("cliente", "")),
+                    "maquina": str(row.get("maquina", "")),
+                    "operario": str(row.get("operario", "")),
+                    "turno": str(row.get("turno", "")),
+                    "cantidad": 0,
+                    "metros": float(row.get("metros", 0) or 0),
+                    "velocidadObjetivo": float(row.get("velocidadObjetivo", 0) or 0),
+                    "velocidadActual": float(row.get("velocidadActual", 0) or 0),
+                    "notas": "Importado del reporte histórico",
+                    "status": status,
+                    "createdAt": now,
+                    "finalizadaAt": now if status == "finalizada" else None,
+                    "ajustes": [],
+                    "history": [
+                        {"status": "setup", "at": now},
+                        {"status": status, "at": now}
+                    ],
+                    "_imported": True,
+                    "_importedDate": row.get("fecha", ""),
+                    "_tMontaje": str(row.get("tMontaje", "")),
+                    "_tAjuste": str(row.get("tAjuste", "")),
+                    "_tProduccion": str(row.get("tProduccion", "")),
+                }
+                
+                cur.execute(
+                    "INSERT INTO orders (id, data) VALUES (%s, %s) ON CONFLICT (id) DO NOTHING",
+                    (order_id, json.dumps(order))
+                )
+                imported += 1
+            except Exception as e:
+                errors.append(str(e))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+    return jsonify({"ok": True, "imported": imported, "errors": errors})
+
 if __name__ == "__main__":
     app.run(debug=True, threaded=True, host="0.0.0.0", port=5000)
