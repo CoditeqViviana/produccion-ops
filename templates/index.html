@@ -46,6 +46,8 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0F172A;color:#E2E8F0;mi
   <div id="nav">
     <input type="file" id="excel-input" accept=".xlsx,.xls" style="display:none"/>
     <button class="btn" onclick="document.getElementById('excel-input').click()" style="padding:6px 12px;font-size:12px;background:#064E3B;color:#6EE7B7">📂 Subir Excel</button>
+    <input type="file" id="import-input" accept=".xls,.xlsx,.html,.htm" style="display:none"/>
+    <button class="btn" onclick="document.getElementById('import-input').click()" style="padding:6px 12px;font-size:12px;background:#1D4ED8;color:#93C5FD">📥 Importar Historial</button>
     <button class="btn" onclick="confirmReset()" style="padding:6px 12px;font-size:12px;background:#7F1D1D;color:#FCA5A5">🗑️ Reset</button>
     <button class="nav-btn active" id="nav-dashboard" onclick="setView('dashboard')">📊 Dashboard</button>
     <button class="nav-btn" id="nav-maquinas" onclick="setView('maquinas')">🖥️ Por Máquina</button>
@@ -91,7 +93,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0F172A;color:#E2E8F0;mi
 <script>
 // ============ CONFIG ============
 var MACHINES = ["Nilpeter 1","Nilpeter 2","Kromia"];
-var OPERARIOS = ["ALONSO RIOS MANUEL RICARDO","ANAYA BASTIDAS WILMER","CASTIBLANCO WILSON","CHAGUALA YAIMA LEONEL ANDRES","CORTES PINZON ULISES","CUELLAR MORA ANDRES ANTONIO","DONCEL AVENDAÑO ERNESTO","LIZARAZO MONTOYA OSCAR JAVIER","MEDINA CORTES SANTIAGO ADOLFO","MOLINA CHITIVA JULIAN DAVID","MOYANO URREA HARLY YINNET","OSORIO MUÑOZ GLEIBER JOSE","RAMIREZ TORRES BETTY LISSETTE","RODRIGUEZ EDWIN","RUEDA PEÑA GEISSON EFREN","SERRANO CARDENAS ANDRES FABIAN","TRONCOS JUAN","VERANO SANCHEZ WALTER"];
+var OPERARIOS = ["ALONSO RIOS MANUEL RICARDO","ANAYA BASTIDAS WILMER","CHAGUALA YAIMA LEONEL ANDRES","CORTES PINZON ULISES","CUELLAR MORA ANDRES ANTONIO","DONCEL AVENDAÑO ERNESTO","LIZARAZO MONTOYA OSCAR JAVIER","MEDINA CORTES SANTIAGO ADOLFO","MOLINA CHITIVA JULIAN DAVID","MOYANO URREA HARLY YINNET","OSORIO MUÑOZ GLEIBER JOSE","RAMIREZ TORRES BETTY LISSETTE","SERRANO CARDENAS ANDRES FABIAN"];
 var REPORTANTES = ["ALVARADO CORREDOR JIMMY ALEJANDRO","BRICEÑO ARENAS LIZ ANYURY","DIAZ ORJUELA MARTHA NANCI"];
 var STATUS_KEYS = ["setup","ajuste","produccion","finalizada"];
 var STATUS_CFG = {
@@ -863,6 +865,81 @@ function showStatusBar(msg, ok){
 }
 
 // ============ RESET ============
+// ============ IMPORT HISTORICAL REPORT ============
+document.getElementById("import-input").addEventListener("change", function(e){
+  var file = e.target.files[0];
+  if(!file) return;
+  if(!confirm("¿Importar órdenes históricas desde \"" + file.name + "\"? Se agregarán al tablero sin borrar las existentes.")) return;
+  
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    try {
+      var content = ev.target.result;
+      // Parse HTML table (our export format)
+      var parser = new DOMParser();
+      var doc2 = parser.parseFromString(content, "text/html");
+      var rows = doc2.querySelectorAll("table tr");
+      if(rows.length < 2){ showStatusBar("❌ No se encontraron datos en el archivo.", false); return; }
+      
+      var headers = [];
+      var headerCells = rows[0].querySelectorAll("th,td");
+      for(var h=0; h<headerCells.length; h++) headers.push(headerCells[h].textContent.trim());
+      
+      var mapped = [];
+      for(var r=1; r<rows.length; r++){
+        var cells = rows[r].querySelectorAll("td,th");
+        if(cells.length < 8) continue;
+        var row = {};
+        for(var c=0; c<headers.length; c++){
+          row[headers[c]] = cells[c] ? cells[c].textContent.trim() : "";
+        }
+        // Map to our format
+        mapped.push({
+          ordenId:          row["Orden"]        || "",
+          producto:         row["Producto"]     || "",
+          cliente:          row["Cliente"]      || "",
+          maquina:          row["Máquina"]      || "",
+          operario:         row["Operario"]     || "",
+          turno:            row["Turno"]        || "",
+          fecha:            row["Fecha"]        || "",
+          estado:           row["Estado"]       || "Finalizada",
+          metros:           parseFloat(row["Metros"]) || 0,
+          velocidadObjetivo: parseFloat(row["Vel.Objetivo"]) || 0,
+          velocidadActual:  parseFloat(row["Vel.Real"]) || 0,
+          tMontaje:         row["T.Montaje"]    || "",
+          tAjuste:          row["T.Ajuste"]     || "",
+          tProduccion:      row["T.Producción"] || "",
+        });
+      }
+      
+      if(mapped.length === 0){ showStatusBar("❌ No se encontraron órdenes válidas.", false); return; }
+      
+      showStatusBar("⏳ Importando " + mapped.length + " órdenes...", true);
+      
+      fetch("/api/import", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({secret:"coditeq2024", rows: mapped})
+      })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d.ok){
+          showStatusBar("✅ " + d.imported + " órdenes importadas correctamente del historial.", true);
+          loadOrders();
+        } else {
+          showStatusBar("❌ Error al importar: " + (d.error||"desconocido"), false);
+        }
+      })
+      .catch(function(e){ showStatusBar("❌ Error de conexión: " + e.message, false); });
+      
+    } catch(err) {
+      showStatusBar("❌ Error leyendo el archivo: " + err.message, false);
+    }
+  };
+  reader.readAsText(file, "utf-8");
+  e.target.value = "";
+});
+
 function confirmReset(){
   if(!confirm("⚠️ ¿Borrar TODAS las órdenes? Esta acción no se puede deshacer.")) return;
   fetch("/api/reset",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({secret:"coditeq2024"})})
