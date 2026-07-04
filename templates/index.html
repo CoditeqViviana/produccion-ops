@@ -139,6 +139,16 @@ function getFechaCol(isoDate){
 function escHtml(s){
   return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
+function parseTimeStr(s){
+  if(!s || s==="—" || s==="0s") return 0;
+  s = String(s);
+  var total=0;
+  var h=s.match(/(\d+)h/); var m=s.match(/(\d+)m/); var sec=s.match(/(\d+)s/);
+  if(h) total+=parseInt(h[1])*3600;
+  if(m) total+=parseInt(m[1])*60;
+  if(sec) total+=parseInt(sec[1]);
+  return total;
+}
 function computeTimes(order){
   var t={tSetup:0,tAjuste:0,tProduccion:0,tFinalizada:0};
   var keyMap={setup:"tSetup",ajuste:"tAjuste",produccion:"tProduccion",finalizada:"tFinalizada"};
@@ -150,6 +160,14 @@ function computeTimes(order){
     var end=hist[i+1] ? new Date(hist[i+1].at).getTime() : ceiling;
     var k=keyMap[hist[i].status];
     if(k) t[k]+=Math.floor((end-start)/1000);
+  }
+  // For imported orders, use stored time strings if computed times are all zero
+  var total = t.tSetup+t.tAjuste+t.tProduccion+t.tFinalizada;
+  if(total===0 && order._imported){
+    t.tSetup    = parseTimeStr(order._tMontaje);
+    t.tAjuste   = parseTimeStr(order._tAjuste);
+    t.tProduccion = parseTimeStr(order._tProduccion);
+    t.tFinalizada = 0;
   }
   return t;
 }
@@ -281,17 +299,19 @@ function renderDashboard(){
         var key = STATUS_KEYS[sk];
         var tc = STATUS_CFG[key];
         var tKey = "t"+key.charAt(0).toUpperCase()+key.slice(1);
-        timeBoxes += '<div style="background:#0F172A;border-radius:7px;padding:6px 8px;border:1px solid '+(ord.status===key?tc.color+"80":"#0F172A")+'"><div style="font-size:9px;color:#64748B">'+tc.icon+' '+tc.label+'</div><div style="font-size:12px;font-weight:600;font-family:monospace;color:'+tc.color+';margin-top:2px">'+fmtTime(t[tKey])+'</div></div>';
+        var tval = t[tKey]||0;
+        timeBoxes += '<div style="background:#0F172A;border-radius:7px;padding:5px 7px;border:1px solid '+(ord.status===key?tc.color+"80":"transparent")+'">'
+          +'<div style="font-size:9px;color:#64748B">'+tc.icon+' '+tc.label+'</div>'
+          +'<div style="font-size:11px;font-weight:600;font-family:monospace;color:'+(tval>0?tc.color:"#334155")+';margin-top:1px">'+fmtTime(tval)+'</div>'
+          +'</div>';
       }
 
       var velBlock = "";
       if(velObj>0){
-        velBlock = '<div style="background:#0F172A;border-radius:8px;padding:8px 12px;margin-bottom:10px;border:1px solid #1E293B">'+
-          '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:10px;color:#64748B;font-weight:600">⚡ VELOCIDAD</span><span style="font-size:11px;font-weight:700;font-family:monospace;color:'+vc+'">'+velPct.toFixed(0)+'%</span></div>'+
-          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">'+
-            '<div style="flex:1;text-align:center;background:#1E293B;border-radius:6px;padding:5px"><div style="font-size:9px;color:#64748B">Real</div><div style="font-size:20px;font-weight:700;color:'+vc+';font-family:monospace">'+velReal+'</div><div style="font-size:9px;color:#475569">uds/hr</div></div>'+
-            '<div style="color:#475569;font-size:11px">vs</div>'+
-            '<div style="flex:1;text-align:center;background:#1E293B;border-radius:6px;padding:5px"><div style="font-size:9px;color:#64748B">Objetivo</div><div style="font-size:20px;font-weight:700;color:#64748B;font-family:monospace">'+velObj+'</div><div style="font-size:9px;color:#475569">uds/hr</div></div>'+
+        velBlock = '<div style="background:#0F172A;border-radius:8px;padding:7px 10px;margin-bottom:8px;border:1px solid #1E293B">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
+            '<span style="font-size:10px;color:#64748B">⚡ Real <strong style="color:'+vc+';font-family:monospace">'+velReal+'</strong> / Obj <strong style="color:#64748B;font-family:monospace">'+velObj+'</strong> uds/hr</span>'+
+            '<span style="font-size:12px;font-weight:700;color:'+vc+'">'+velPct.toFixed(0)+'%</span>'+
           '</div>'+
           '<div style="background:#1E293B;border-radius:4px;height:5px;overflow:hidden"><div style="width:'+Math.min(velPct,100)+'%;background:'+vc+';height:100%;border-radius:4px"></div></div>'+
         '</div>';
@@ -299,11 +319,12 @@ function renderDashboard(){
 
       var etaBlock = "";
       var eta = calcETA(ord);
-      if(eta){
-        var ringC = 2*Math.PI*18;
-        etaBlock = '<div style="background:#0F172A;border-radius:8px;padding:8px 12px;margin-bottom:10px;border:1px solid #1E293B;display:flex;justify-content:space-between;align-items:center">'+
-          '<div><div style="font-size:10px;color:#64748B">⏰ Hora estimada fin</div><div style="font-size:16px;font-weight:700;color:#10B981;font-family:monospace">'+eta.hora+'</div><div style="font-size:10px;color:#64748B">'+eta.remaining+' min restantes · '+eta.pct+'% avance</div></div>'+
-          '<svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="none" stroke="#1E293B" stroke-width="4"/><circle cx="22" cy="22" r="18" fill="none" stroke="#10B981" stroke-width="4" stroke-dasharray="'+ringC.toFixed(1)+'" stroke-dashoffset="'+(ringC*(1-eta.pct/100)).toFixed(1)+'" stroke-linecap="round" transform="rotate(-90 22 22)"/><text x="22" y="26" text-anchor="middle" fill="#10B981" font-size="9" font-weight="700">'+eta.pct+'%</text></svg>'+
+      if(eta && ord.status==="produccion"){
+        etaBlock = '<div style="background:#052E16;border-radius:7px;padding:6px 10px;margin-bottom:8px;border:1px solid #065F46">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center">'+
+            '<div><div style="font-size:9px;color:#6EE7B7">⏰ Fin estimado</div><div style="font-size:15px;font-weight:700;color:#10B981;font-family:monospace">'+eta.hora+'</div></div>'+
+            '<div style="font-size:10px;color:#6EE7B7;text-align:right">'+eta.remaining+' min<br>'+eta.pct+'% avance</div>'+
+          '</div>'+
         '</div>';
       }
 
@@ -325,10 +346,7 @@ function renderDashboard(){
           (ord.turno?'<div style="font-size:10px;color:#475569;margin-top:1px">🕐 '+ord.turno+'</div>':'')+
           '</div>'+badgeHtml(ord.status)+
         '</div>'+
-        '<div style="display:flex;align-items:center;gap:16px;margin-bottom:14px">'+
-          '<svg width="68" height="68" viewBox="0 0 72 72" style="flex-shrink:0"><circle cx="36" cy="36" r="28" fill="none" stroke="#1E293B" stroke-width="6"/><circle cx="36" cy="36" r="28" fill="none" stroke="'+vc+'" stroke-width="6" stroke-dasharray="'+circ.toFixed(1)+'" stroke-dashoffset="'+offset.toFixed(1)+'" stroke-linecap="round" transform="rotate(-90 36 36)"/><text x="36" y="40" text-anchor="middle" fill="'+vc+'" font-size="12" font-weight="700" font-family="monospace">'+velPct.toFixed(0)+'%</text></svg>'+
-          '<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px">'+timeBoxes+'</div>'+
-        '</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px">'+timeBoxes+'</div>'+
         velBlock + etaBlock +
         '<div style="margin-bottom:12px">'+accionesHtml(acc)+'</div>'+
         '<div style="display:flex;gap:5px;flex-wrap:wrap">'+btns+
@@ -1039,7 +1057,7 @@ function confirmReset(){
 
 // ============ DATA LOADING ============
 function loadOrders(){
-  fetch("/api/orders")
+  return fetch("/api/orders")
     .then(function(r){ return r.json(); })
     .then(function(d){
       orders = d.orders || [];
@@ -1052,6 +1070,23 @@ function loadOrders(){
       document.getElementById("conn-label").style.color = "#EF4444";
     });
 }
+
+function fixVelocidadObjetivo(){
+  // Called once on first load to set vel objetivo=40 for all orders with 0
+  var needsFix = orders.some(function(o){ return !Number(o.velocidadObjetivo); });
+  if(!needsFix) return;
+  fetch("/api/fix/velocidad",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({secret:"coditeq2024", velocidad:40})
+  }).then(function(r){ return r.json(); })
+  .then(function(d){
+    if(d.ok && d.updated > 0){
+      showStatusBar("✅ Velocidad objetivo ajustada a 40 uds/hr en "+d.updated+" órdenes.", true);
+      loadOrders();
+    }
+  }).catch(function(){});
+}
 function loadCatalog(){
   fetch("/api/catalog")
     .then(function(r){ return r.json(); })
@@ -1060,7 +1095,7 @@ function loadCatalog(){
 }
 
 // ============ BOOT ============
-loadOrders();
+loadOrders().then(function(){ fixVelocidadObjetivo(); });
 loadCatalog();
 setInterval(loadOrders, 5000);
 setInterval(function(){ renderView(curView); }, 1000); // live timers
