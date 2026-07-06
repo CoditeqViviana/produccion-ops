@@ -15,7 +15,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0F172A;color:#E2E8F0;mi
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
 .inp{width:100%;padding:10px 12px;background:#0F172A;border:1px solid #334155;border-radius:8px;color:#E2E8F0;font-size:14px;font-family:inherit}
-#hdr{background:#0F172A;border-bottom:1px solid #1E293B;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;flex-wrap:wrap;gap:8px}
+#hdr{background:#0F172A;border-bottom:1px solid #1E293B;padding:0 24px;display:flex;align-items:center;justify-content:space-between;min-height:56px;flex-wrap:wrap;gap:8px;position:sticky;top:0;z-index:100}
 #hdr-left{display:flex;align-items:center;gap:10px;padding:8px 0}
 #nav{display:flex;gap:6px;flex-wrap:wrap;padding:8px 0}
 .nav-btn{padding:6px 14px;font-size:12px;border:1px solid #334155;background:#1E293B;color:#94A3B8;border-radius:8px;cursor:pointer;font-weight:600}
@@ -49,7 +49,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0F172A;color:#E2E8F0;mi
     <input type="file" id="import-input" accept=".xls,.xlsx,.html,.htm" style="display:none"/>
     <button class="btn" onclick="document.getElementById('import-input').click()" style="padding:6px 12px;font-size:12px;background:#1D4ED8;color:#93C5FD">📥 Importar Historial</button>
     <button class="btn" onclick="exportarTurno()" style="padding:6px 12px;font-size:12px;background:#065F46;color:#6EE7B7">💾 Exportar Turno</button>
-    <button class="btn" onclick="confirmReset()" style="padding:6px 12px;font-size:12px;background:#7F1D1D;color:#FCA5A5">🗑️ Reset</button>
+
     <button class="nav-btn active" id="nav-dashboard" onclick="setView('dashboard')">📊 Dashboard</button>
     <button class="nav-btn" id="nav-maquinas" onclick="setView('maquinas')">🖥️ Por Máquina</button>
     <button class="nav-btn" id="nav-ordenes" onclick="setView('ordenes')">📋 Órdenes</button>
@@ -58,7 +58,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0F172A;color:#E2E8F0;mi
   </div>
 </div>
 
-<div id="status-bar" style="display:none;padding:6px 24px;font-size:12px"></div>
+<div id="status-bar" style="display:none;padding:8px 24px;font-size:12px;position:relative;z-index:50;clear:both"></div>
 
 <div id="main">
   <div id="view-dashboard"></div>
@@ -962,10 +962,15 @@ function showStatusBar(msg, ok){
   var bar = document.getElementById("status-bar");
   bar.style.display = "flex";
   bar.style.justifyContent = "space-between";
+  bar.style.alignItems = "center";
   bar.style.background = ok ? "#052E16" : "#450A0A";
   bar.style.color = ok ? "#6EE7B7" : "#FCA5A5";
   bar.style.borderBottom = "1px solid #334155";
-  bar.innerHTML = '<span>'+msg+'</span><span style="cursor:pointer;color:#64748B" onclick="this.parentElement.style.display=\'none\'">✕</span>';
+  bar.style.position = "relative";
+  bar.style.zIndex = "50";
+  bar.innerHTML = '<span>'+msg+'</span><span style="cursor:pointer;color:#64748B;font-size:16px;padding:0 6px" onclick="this.parentElement.style.display=\'none\'">✕</span>';
+  clearTimeout(bar._hideTimer);
+  bar._hideTimer = setTimeout(function(){ bar.style.display="none"; }, 6000);
 }
 
 // ============ RESET ============
